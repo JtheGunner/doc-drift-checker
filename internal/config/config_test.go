@@ -42,10 +42,9 @@ mappings:
   "Installation": ["cmd/**", "go.mod"]
   "#usage": ["internal/cli/*.go"]
 mode:
-  default: staged
+  default: history
 severity:
-  default: error
-  fail-on: warning
+  fail-on: high
 `,
 			want: Config{
 				Docs:   []string{"README.md", "docs/*.md"},
@@ -54,8 +53,8 @@ severity:
 					"Installation": {"cmd/**", "go.mod"},
 					"#usage":       {"internal/cli/*.go"},
 				},
-				Mode:     Mode{Default: ModeStaged},
-				Severity: Severity{Default: LevelError, FailOn: LevelWarning},
+				Mode:     Mode{Default: ModeHistory},
+				Severity: Severity{FailOn: SeverityHigh},
 			},
 		},
 		{
@@ -95,8 +94,8 @@ severity:
 		},
 		{
 			name:    "invalid severity",
-			input:   "severity:\n  fail-on: fatal\n",
-			wantErr: []string{".docdrift.yaml", "severity.fail-on", "fatal"},
+			input:   "severity:\n  fail-on: critical\n",
+			wantErr: []string{".docdrift.yaml", "severity.fail-on", "critical"},
 		},
 		{
 			name:    "wrong type",
@@ -138,7 +137,7 @@ func TestDefaults(t *testing.T) {
 	if !reflect.DeepEqual(d.Docs, []string{"README.md"}) {
 		t.Errorf("Docs default = %v", d.Docs)
 	}
-	if d.Mode.Default != ModeBranch || d.Severity.Default != LevelWarning || d.Severity.FailOn != LevelError {
+	if d.Mode.Default != ModeDiff || d.Severity.FailOn != SeverityLow {
 		t.Errorf("unexpected defaults: %+v", d)
 	}
 }

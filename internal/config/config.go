@@ -5,9 +5,8 @@
 //	docs:             ["README.md"]
 //	ignore:           []
 //	mappings:         {}
-//	mode.default:     "branch"
-//	severity.default: "warning"
-//	severity.fail-on: "error"
+//	mode.default:     "diff"
+//	severity.fail-on: "low"
 package config
 
 import (
@@ -28,24 +27,22 @@ import (
 // FileName is the name of the config file in the repository root.
 const FileName = ".docdrift.yaml"
 
-// ModeName selects which changes are compared against the documentation.
+// ModeName selects how drift is detected.
 type ModeName string
 
 // Supported modes.
 const (
-	ModeBranch   ModeName = "branch"   // commits on the current branch
-	ModeStaged   ModeName = "staged"   // staged changes only
-	ModeWorktree ModeName = "worktree" // uncommitted working tree changes
+	ModeDiff    ModeName = "diff"    // compares base...HEAD
+	ModeHistory ModeName = "history" // uses git blame dates
 )
 
-// Level is the severity of a finding.
-type Level string
+// SeverityLevel is the severity of a drift finding.
+type SeverityLevel string
 
-// Supported severity levels, from least to most severe.
+// Supported severities, from least to most severe.
 const (
-	LevelInfo    Level = "info"
-	LevelWarning Level = "warning"
-	LevelError   Level = "error"
+	SeverityLow  SeverityLevel = "low"
+	SeverityHigh SeverityLevel = "high"
 )
 
 // Mode holds the mode settings.
@@ -56,10 +53,8 @@ type Mode struct {
 
 // Severity holds the severity settings.
 type Severity struct {
-	// Default is the level assigned to findings.
-	Default Level `yaml:"default"`
-	// FailOn is the lowest level that makes the run fail.
-	FailOn Level `yaml:"fail-on"`
+	// FailOn is the lowest drift severity that makes the check fail.
+	FailOn SeverityLevel `yaml:"fail-on"`
 }
 
 // Config is the validated configuration.
@@ -81,8 +76,8 @@ func Defaults() Config {
 		Docs:     []string{"README.md"},
 		Ignore:   nil,
 		Mappings: nil,
-		Mode:     Mode{Default: ModeBranch},
-		Severity: Severity{Default: LevelWarning, FailOn: LevelError},
+		Mode:     Mode{Default: ModeDiff},
+		Severity: Severity{FailOn: SeverityLow},
 	}
 }
 
@@ -134,22 +129,16 @@ func validate(cfg Config) error {
 		}
 	}
 	switch cfg.Mode.Default {
-	case ModeBranch, ModeStaged, ModeWorktree:
+	case ModeDiff, ModeHistory:
 	default:
-		return fmt.Errorf("key mode.default: unknown mode %q (want branch, staged or worktree)", cfg.Mode.Default)
+		return fmt.Errorf("key mode.default: unknown mode %q (want diff or history)", cfg.Mode.Default)
 	}
-	if err := validateLevel("severity.default", cfg.Severity.Default); err != nil {
-		return err
+	switch cfg.Severity.FailOn {
+	case SeverityLow, SeverityHigh:
+	default:
+		return fmt.Errorf("key severity.fail-on: unknown severity %q (want low or high)", cfg.Severity.FailOn)
 	}
-	return validateLevel("severity.fail-on", cfg.Severity.FailOn)
-}
-
-func validateLevel(key string, level Level) error {
-	switch level {
-	case LevelInfo, LevelWarning, LevelError:
-		return nil
-	}
-	return fmt.Errorf("key %s: unknown level %q (want info, warning or error)", key, level)
+	return nil
 }
 
 func validateGlobs(key string, globs []string) error {

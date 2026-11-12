@@ -33,4 +33,4 @@ Go CLI that reports when code changed but the README passage describing it did n
 
 ## Config
 
-`.docdrift.yaml` in the repo root is loaded by `internal/config` (`Load`, `Parse`, `Defaults`). Keys: `docs`, `ignore`, `mappings`, `mode.default`, `severity.default`, `severity.fail-on`. Unknown keys and invalid globs are errors; defaults are documented in the package comment.
+`.docdrift.yaml` in the repo root is loaded by `internal/config` (`Load`, `Parse`, `Defaults`). Keys: `docs`, `ignore`, `mappings`, `mode.default` (`diff` default, or `history`), `severity.fail-on` (`low` default, or `high`). Unknown keys and invalid globs are errors; defaults are documented in the package comment.
