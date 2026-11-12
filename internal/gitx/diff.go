@@ -130,3 +130,23 @@ func parseRange(s string) (start, count int, err error) {
 	count, err = strconv.Atoi(countText)
 	return start, count, err
 }
+
+// WhitespaceOnly reports whether the diff of one file between the merge base of
+// base and HEAD contains nothing but whitespace changes: indentation, trailing
+// or inner spacing, line-ending differences and added or removed blank lines
+// (git diff -w --ignore-blank-lines). Binary files and mode changes count as
+// real changes.
+func (c *Client) WhitespaceOnly(base string, change Change) (bool, error) {
+	if err := c.ensureBase(base); err != nil {
+		return false, err
+	}
+	args := []string{"diff", "-w", "--ignore-blank-lines", "-M", base + "...HEAD", "--", change.Path}
+	if change.OldPath != "" {
+		args = append(args, change.OldPath)
+	}
+	out, err := c.run(args...)
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(out) == "", nil
+}

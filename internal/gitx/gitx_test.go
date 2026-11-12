@@ -337,3 +337,50 @@ func TestRoot(t *testing.T) {
 		t.Fatalf("got %q want %q", gotDir, wantDir)
 	}
 }
+
+func TestWhitespaceOnly(t *testing.T) {
+	const base = "func a() {\n\tx := 1\n\ty := 2\n}\n"
+	tests := []struct {
+		name    string
+		changed string
+		want    bool
+	}{
+		{"indent only", "func a() {\n    x := 1\n    y := 2\n}\n", true},
+		{"trailing spaces", "func a() {\n\tx := 1   \n\ty := 2\t\n}\n", true},
+		{"inner spacing", "func a() {\n\tx  :=  1\n\ty := 2\n}\n", true},
+		{"blank lines added", "func a() {\n\n\tx := 1\n\n\n\ty := 2\n}\n", true},
+		{"crlf line endings", "func a() {\r\n\tx := 1\r\n\ty := 2\r\n}\r\n", true},
+		{"real change", "func a() {\n\tx := 1\n\ty := 3\n}\n", false},
+		{"mixed whitespace and real change", "func a() {\n    x := 1\n    y := 3\n}\n", false},
+		{"blank line plus real change", "func a() {\n\n\tx := 1\n\ty := 2\n\tz := 3\n}\n", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := testutil.NewRepo(t)
+			r.Write("a.go", base)
+			r.Commit("base")
+			r.Branch("feature")
+			r.CommitFile("a.go", tt.changed, "change")
+			client := gitx.New(r.Dir)
+			changes, err := client.ChangedFiles("main")
+			if err != nil || len(changes) != 1 {
+				t.Fatalf("changes = %+v, err = %v", changes, err)
+			}
+			got, err := client.WhitespaceOnly("main", changes[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Errorf("WhitespaceOnly = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWhitespaceOnlyUnknownBase(t *testing.T) {
+	r := featureRepo(t)
+	_, err := gitx.New(r.Dir).WhitespaceOnly("nope", gitx.Change{Status: gitx.StatusModified, Path: "mod.txt"})
+	if err == nil {
+		t.Fatal("expected an error for an unknown base")
+	}
+}
