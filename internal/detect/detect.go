@@ -40,6 +40,8 @@ package detect
 import (
 	"sort"
 
+	"github.com/JtheGunner/doc-drift-checker/internal/config"
+	"github.com/JtheGunner/doc-drift-checker/internal/docparse"
 	"github.com/JtheGunner/doc-drift-checker/internal/links"
 )
 
@@ -83,6 +85,17 @@ type Drift struct {
 	Line int
 	// Files are the changed files that triggered the drift, sorted by label.
 	Files []string
+	// Severity is high when a flag, env var or identifier named in the section
+	// no longer exists in its mapped code, see Classify. Detect and History
+	// report low; Classify refines diff-mode drifts.
+	Severity config.SeverityLevel
+	// BrokenReferences are the references that make the drift high; never nil.
+	BrokenReferences []docparse.Reference
+}
+
+// newDrift builds a low-severity drift.
+func newDrift(doc string, s links.SectionLinks, files []string) Drift {
+	return Drift{Doc: doc, Section: s.Heading, Line: s.StartLine, Files: files, Severity: config.SeverityLow, BrokenReferences: []docparse.Reference{}}
 }
 
 // Detect returns the drifted sections in document and section order.
@@ -97,7 +110,7 @@ func Detect(in Input) []Drift {
 			if touched(ownRange(doc.Sections, i), in.DocChanges[doc.Doc]) {
 				continue
 			}
-			drifts = append(drifts, Drift{Doc: doc.Doc, Section: section.Heading, Line: section.StartLine, Files: files})
+			drifts = append(drifts, newDrift(doc.Doc, section, files))
 		}
 	}
 	return drifts

@@ -40,7 +40,7 @@ func History(in HistoryInput) []Drift {
 			if len(files) == 0 {
 				continue
 			}
-			drifts = append(drifts, Drift{Doc: doc.Doc, Section: section.Heading, Line: section.StartLine, Files: files})
+			drifts = append(drifts, newDrift(doc.Doc, section, files))
 		}
 	}
 	return drifts

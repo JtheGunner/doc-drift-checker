@@ -104,6 +104,7 @@ func TestDetect(t *testing.T) {
 			if len(got) == 0 && len(tt.want) == 0 {
 				return
 			}
+			tt.want = withLowSeverity(tt.want)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("got %+v\nwant %+v", got, tt.want)
 			}
