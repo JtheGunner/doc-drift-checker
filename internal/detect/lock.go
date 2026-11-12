@@ -35,27 +35,40 @@ func ApplyLock(docs []links.DocLinks, drifts []Drift, locked map[SectionKey][]st
 			key := SectionKey{Doc: doc.Doc, Line: section.StartLine}
 			d, drifted := existing[key]
 			changed, hasEntry := locked[key]
+			reported, effect := decideLock(history, drifted, hasEntry, changed)
 			switch {
-			case !hasEntry:
-				if drifted {
-					out = append(out, d)
-				}
-			case len(changed) == 0:
-				// The maintainer confirmed exactly this code state.
-			case !history:
-				if drifted {
-					out = append(out, d)
-				}
-			case drifted:
+			case !reported:
+			case effect == LockEffectForcedDrift && drifted:
 				d.Files = changed
 				out = append(out, d)
-			default:
+			case effect == LockEffectForcedDrift:
 				out = append(out, Drift{
 					Doc: doc.Doc, Section: section.Heading, Line: section.StartLine, Files: changed,
 					Severity: config.SeverityLow, BrokenReferences: []docparse.Reference{},
 				})
+			default:
+				out = append(out, d)
 			}
 		}
 	}
 	return out
+}
+
+// decideLock is the lockfile rule for one section: whether it is reported after
+// the lockfile is applied, and what the entry did. drifted is the result before
+// the lockfile; changed lists the files that differ from the entry.
+func decideLock(history, drifted, hasEntry bool, changed []string) (reported bool, effect LockEffect) {
+	switch {
+	case !hasEntry:
+		return drifted, LockEffectNone
+	case len(changed) == 0:
+		// The maintainer confirmed exactly this code state.
+		if drifted {
+			return false, LockEffectSuppressed
+		}
+		return false, LockEffectNoEffect
+	case !history:
+		return drifted, LockEffectNoEffect
+	}
+	return true, LockEffectForcedDrift
 }

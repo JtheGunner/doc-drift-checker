@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "mode": "history",
+  "base": "",
+  "section": {
+    "key": "README.md#usage",
+    "doc": "README.md",
+    "anchor": "usage",
+    "heading": "Usage",
+    "line": 3,
+    "ownRange": {
+      "start": 3,
+      "end": 6
+    }
+  },
+  "verdict": "no-drift",
+  "reason": "code-not-newer",
+  "triggeringFiles": [],
+  "brokenReferences": [],
+  "links": [
+    {
+      "file": "src/a.go",
+      "origin": "implicit"
+    },
+    {
+      "file": "src/gen_test.go",
+      "origin": "implicit"
+    }
+  ],
+  "unresolved": [],
+  "unmapped": false,
+  "ignoreRules": [],
+  "files": [
+    {
+      "path": "src/a.go",
+      "origin": "implicit",
+      "triggers": false,
+      "changes": [],
+      "commits": [],
+      "commitsTruncated": false,
+      "newestCommit": {
+        "hash": "aaaaaaaabbbbbbbb",
+        "date": "2024-01-01T12:01:00Z",
+        "subject": "code"
+      }
+    },
+    {
+      "path": "src/gen_test.go",
+      "origin": "implicit",
+      "triggers": false,
+      "changes": [],
+      "commits": [],
+      "commitsTruncated": false,
+      "ignoredGlob": "**/*_test.go",
+      "newestCommit": null
+    }
+  ],
+  "own": {
+    "docChanged": false,
+    "hunks": []
+  },
+  "sectionDate": {
+    "hash": "ccccccccdddddddd",
+    "date": "2024-01-01T12:02:00Z"
+  },
+  "lock": {
+    "state": "none",
+    "differing": [],
+    "effect": "none",
+    "driftedBeforeLock": false
+  }
+}

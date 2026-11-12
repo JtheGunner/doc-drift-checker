@@ -28,12 +28,24 @@ func NewFilter(ignore []string) Filter {
 
 // Ignored reports whether the slash-separated path matches an ignore glob.
 func (f Filter) Ignored(path string) bool {
+	_, ok := f.MatchingGlob(path)
+	return ok
+}
+
+// MatchingGlob returns the first ignore glob (in configuration order) that
+// matches the slash-separated path.
+func (f Filter) MatchingGlob(path string) (string, bool) {
 	for _, g := range f.globs {
 		if glob.Match(g, path) {
-			return true
+			return g, true
 		}
 	}
-	return false
+	return "", false
+}
+
+// Globs returns a copy of the ignore globs, in configuration order.
+func (f Filter) Globs() []string {
+	return append([]string{}, f.globs...)
 }
 
 // PathIgnored reports whether every path of the change is ignored.

@@ -28,11 +28,13 @@ func loadRepoInputs() (repoInputs, error) {
 	if err != nil {
 		return repoInputs{}, fmt.Errorf("get working directory: %w", err)
 	}
-	git := gitx.New(wd)
-	root, err := git.Root()
+	root, err := gitx.New(wd).Root()
 	if err != nil {
 		return repoInputs{}, fmt.Errorf("find repository root: %w", err)
 	}
+	// Every later git call runs from the root: paths are root-relative, and a
+	// pathspec resolves against the working directory.
+	git := gitx.New(root)
 	cfg, err := config.Load(root)
 	if err != nil {
 		return repoInputs{}, err

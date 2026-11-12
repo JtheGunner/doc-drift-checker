@@ -139,42 +139,44 @@ func writeReport(w io.Writer, opts checkOptions, drifts []detect.Drift) error {
 	return report.WriteText(w, drifts)
 }
 
-// runCheck validates the flags and runs diff mode (--base given) or history mode.
+// runCheck validates the flags, evaluates every section and keeps the ones
+// that ended as drift. The evaluation is shared with the explain command.
 func runCheck(opts checkOptions) (checkResult, error) {
 	if opts.format != formatText && opts.format != formatJSON {
 		return checkResult{}, fmt.Errorf("invalid --format %q: use %s or %s", opts.format, formatText, formatJSON)
 	}
-	if !opts.diffMode {
-		return runHistoryCheck(opts.ignoreRevsFile)
-	}
-	if opts.base == "" {
-		return checkResult{}, errors.New("--base needs a reference")
-	}
-	if opts.ignoreRevsFile != "" {
-		return checkResult{}, errors.New("--ignore-revs-file only applies to history mode; remove --base or the flag")
-	}
-	return runDiffCheck(opts.base)
-}
-
-// runDiffCheck gathers the git data for base...HEAD and detects drift.
-func runDiffCheck(base string) (checkResult, error) {
-	in, err := loadRepoInputs()
+	result, err := evaluate(evalOptions{base: opts.base, diffMode: opts.diffMode, ignoreRevsFile: opts.ignoreRevsFile})
 	if err != nil {
 		return checkResult{}, err
+	}
+	return checkResult{drifts: result.evals.Drifts(), failOn: result.failOn}, nil
+}
+
+// evaluateDiff gathers the git data for base...HEAD and evaluates every
+// section. A non-empty section names the section whose commit details are
+// gathered as well (explain).
+func evaluateDiff(base, section string) (evalResult, error) {
+	in, err := loadRepoInputs()
+	if err != nil {
+		return evalResult{}, err
 	}
 	locked, err := loadLock(in.root)
 	if err != nil {
-		return checkResult{}, err
+		return evalResult{}, err
 	}
 	changes, err := in.git.ChangedFiles(base)
 	if err != nil {
-		return checkResult{}, err
+		return evalResult{}, err
 	}
 	// Files removed from the tree (deleted, or renamed away) are no longer
 	// tracked, but sections may still link to them.
 	docs, sections, err := in.resolveDocsWithSections(withRemovedPaths(in.tracked, changes))
 	if err != nil {
-		return checkResult{}, err
+		return evalResult{}, err
+	}
+	target, err := resolveTarget(docs, section)
+	if err != nil {
+		return evalResult{}, err
 	}
 	docChanges := map[string][]detect.LineRange{}
 	for _, doc := range docs {
@@ -184,92 +186,84 @@ func runDiffCheck(base string) (checkResult, error) {
 		}
 		hunks, err := in.git.Hunks(base, change)
 		if err != nil {
-			return checkResult{}, err
+			return evalResult{}, err
 		}
 		docChanges[doc.Doc] = lineRanges(hunks)
 	}
-	relevant, err := relevantChanges(in.git, base, relevance.NewFilter(in.cfg.Ignore), relevance.NewAnalyzerSet(relevance.DefaultAnalyzers()...), changes)
+	filter := relevance.NewFilter(in.cfg.Ignore)
+	fileChanges, err := decideChanges(in.git, base, filter, relevance.NewAnalyzerSet(relevance.DefaultAnalyzers()...), changes)
 	if err != nil {
-		return checkResult{}, err
+		return evalResult{}, err
 	}
-	drifts := detect.Detect(detect.Input{Docs: docs, Changes: detectChanges(relevant), DocChanges: docChanges})
-	// A drift of a section whose code still equals its acknowledged state is
-	// dropped; this runs before severity so suppressed sections are not read.
-	verdicts, err := lockVerdicts(gitx.New(in.root), relevance.NewFilter(in.cfg.Ignore), docs, locked)
+	// The lockfile verdicts are compared before severity so that suppressed
+	// sections are never read.
+	verdicts, err := lockVerdicts(gitx.New(in.root), filter, docs, locked)
 	if err != nil {
-		return checkResult{}, err
+		return evalResult{}, err
 	}
-	drifts = detect.ApplyLock(docs, drifts, verdicts, false)
+	commits, err := commitDetails(gitx.New(in.root), base, changes, target)
+	if err != nil {
+		return evalResult{}, err
+	}
+	evals := detect.Evaluate(detect.EvalInput{
+		Mode: detect.ModeDiff, Base: base, Docs: docs, IgnoreRules: filter.Globs(),
+		Changes: fileChanges, DocChanges: docChanges, Lock: verdicts, Commits: commits,
+	})
 	// Severity reads the mapped files of every drifted section, so it sees the
 	// unfiltered change list: a file the relevance filter dropped still holds
 	// (or no longer holds) the referenced names.
-	drifts, err = classifyDrifts(in.git, base, docs, sections, changes, drifts)
+	evals, err = classifyEvaluations(in.git, base, docs, sections, changes, evals)
 	if err != nil {
-		return checkResult{}, err
+		return evalResult{}, err
 	}
-	return checkResult{drifts: drifts, failOn: in.cfg.Severity.FailOn}, nil
+	return evalResult{evals: evals, failOn: in.cfg.Severity.FailOn, target: target.key}, nil
 }
 
-// relevantChanges drops the changes that cannot make documentation stale:
-// ignored paths, whitespace-only modifications and, for languages with a
-// SymbolAnalyzer, changes that leave the public interface untouched. Other
-// languages keep every change that survives the path rules (path-based
-// fallback). Documentation edits are not filtered here; they are read from the
-// unfiltered change list.
-func relevantChanges(git *gitx.Client, base string, filter relevance.Filter, analyzers relevance.AnalyzerSet, changes []gitx.Change) ([]gitx.Change, error) {
-	relevant := make([]gitx.Change, 0, len(changes))
+// decideChanges runs the relevance pipeline for every change: ignored paths,
+// whitespace-only modifications and, for languages with a SymbolAnalyzer,
+// changes that leave the public interface untouched. Other languages keep every
+// change that survives the path rules (path-based fallback). The decisions are
+// recorded for all changes; Evaluate keeps the relevant ones. Documentation
+// edits are not filtered here; they are read from the unfiltered change list.
+func decideChanges(git *gitx.Client, base string, filter relevance.Filter, analyzers relevance.AnalyzerSet, changes []gitx.Change) ([]detect.FileChange, error) {
+	decided := make([]detect.FileChange, 0, len(changes))
 	mergeBase := ""
 	for _, c := range changes {
-		if filter.PathIgnored(c) {
-			continue
-		}
-		whitespaceOnly := false
-		if filter.NeedsContentCheck(c) {
-			var err error
-			if whitespaceOnly, err = git.WhitespaceOnly(base, c); err != nil {
-				return nil, err
-			}
-		}
-		if !filter.Relevant(c, whitespaceOnly) {
-			continue
-		}
-		if analyzers.Supports(c) {
-			if mergeBase == "" {
-				var err error
-				if mergeBase, err = git.MergeBase(base); err != nil {
-					return nil, err
+		probe := relevance.Probe{
+			WhitespaceOnly: func() (bool, error) { return git.WhitespaceOnly(base, c) },
+			Sources: func() ([]byte, []byte, error) {
+				if mergeBase == "" {
+					var err error
+					if mergeBase, err = git.MergeBase(base); err != nil {
+						return nil, nil, err
+					}
 				}
-			}
-			changed, err := apiChanged(git, mergeBase, analyzers, c)
-			if err != nil {
-				return nil, err
-			}
-			if !changed {
-				continue
-			}
+				return sourcesOf(git, mergeBase, c)
+			},
 		}
-		relevant = append(relevant, c)
+		decision, err := filter.Decide(analyzers, c, probe)
+		if err != nil {
+			return nil, err
+		}
+		decided = append(decided, detect.FileChange{Status: string(c.Status), Path: c.Path, OldPath: c.OldPath, Decision: decision})
 	}
-	return relevant, nil
+	return decided, nil
 }
 
-// apiChanged reads both versions of a file and asks the analyzer whether its
-// public interface changed. The side that does not exist (added or deleted file)
-// is passed as nil.
-func apiChanged(git *gitx.Client, mergeBase string, analyzers relevance.AnalyzerSet, c gitx.Change) (bool, error) {
-	var oldSrc, newSrc []byte
-	var err error
+// sourcesOf reads both versions of a file. The side that does not exist (added
+// or deleted file) is nil.
+func sourcesOf(git *gitx.Client, mergeBase string, c gitx.Change) (oldSrc, newSrc []byte, err error) {
 	if c.Status != gitx.StatusAdded {
 		if oldSrc, err = readOptional(git, mergeBase, c.Path); err != nil {
-			return false, err
+			return nil, nil, err
 		}
 	}
 	if c.Status != gitx.StatusDeleted {
 		if newSrc, err = readOptional(git, "HEAD", c.Path); err != nil {
-			return false, err
+			return nil, nil, err
 		}
 	}
-	return analyzers.APIChanged(c, oldSrc, newSrc)
+	return oldSrc, newSrc, nil
 }
 
 // readOptional reads a file at a revision; a missing file yields nil content.
@@ -310,18 +304,4 @@ func lineRanges(hunks []gitx.Hunk) []detect.LineRange {
 		ranges = append(ranges, detect.LineRange{Start: h.NewStart, Lines: h.NewLines})
 	}
 	return ranges
-}
-
-// detectChanges converts git changes; only renames keep their old path, since a
-// copy leaves the source file unchanged.
-func detectChanges(changes []gitx.Change) []detect.Change {
-	out := make([]detect.Change, 0, len(changes))
-	for _, c := range changes {
-		dc := detect.Change{Path: c.Path}
-		if c.Status == gitx.StatusRenamed {
-			dc.OldPath = c.OldPath
-		}
-		out = append(out, dc)
-	}
-	return out
 }

@@ -14,7 +14,7 @@ import (
 
 // sectionKey is the lockfile key of a section: "<doc path>#<anchor>".
 func sectionKey(doc, anchor string) string {
-	return doc + "#" + anchor
+	return detect.SectionID(doc, anchor)
 }
 
 // mappedState is the state of a section's mapped code at HEAD: the hash of

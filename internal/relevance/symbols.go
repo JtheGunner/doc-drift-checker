@@ -82,12 +82,19 @@ func (s AnalyzerSet) Supports(c gitx.Change) bool {
 // without an analyzer are reported as changed (path-based fallback), and so is
 // an analyzer failure: a broken analysis must not hide drift.
 func (s AnalyzerSet) APIChanged(c gitx.Change, oldSrc, newSrc []byte) (bool, error) {
+	changed, _ := s.analyze(c, oldSrc, newSrc)
+	return changed, nil
+}
+
+// analyze is APIChanged that also reports whether the analyzer failed (and the
+// result is the fail-closed "changed").
+func (s AnalyzerSet) analyze(c gitx.Change, oldSrc, newSrc []byte) (changed, failed bool) {
 	if !s.Supports(c) {
-		return true, nil
+		return true, false
 	}
 	changed, err := s.For(c.Path).APIChanged(oldSrc, newSrc)
 	if err != nil {
-		return true, nil
+		return true, true
 	}
-	return changed, nil
+	return changed, false
 }

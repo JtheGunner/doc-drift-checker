@@ -1,0 +1,53 @@
+Section:  Usage
+Key:      README.md#usage
+Location: README.md:3 (own lines 3-6)
+Mode:     diff (base main)
+
+Verdict:  drift (severity high)
+Reason:   a mapped file changed between base and HEAD and none of the section's own lines did
+Triggering files:
+  src/a.go
+Broken references:
+  flag --gone (README.md:4)
+
+Links:
+  src/a.go (annotation)
+  src/b.go (config)
+  src/c_test.go (implicit)
+  src/d.go (implicit)
+Unresolved references (match no tracked file):
+  gone/** (annotation)
+  docs/x.md (implicit, line 5)
+
+Ignore rules:
+  **/*_test.go
+  vendor/**
+
+Files:
+  src/a.go (annotation)
+    status: modified
+    relevance: kept, exported API changed (analyzer .go)
+    triggers drift: yes
+    commits in main..HEAD, newest first:
+      01234567 2024-01-01T12:02:00Z change the API
+      89abcdef 2024-01-01T12:01:00Z first edit
+      (list truncated, older commits omitted)
+  src/b.go (config)
+    status: modified
+    relevance: dropped, exported API unchanged (analyzer .go)
+    triggers drift: no
+  src/c_test.go (implicit)
+    status: modified
+    relevance: dropped, matches ignore glob "**/*_test.go"
+    triggers drift: no
+  src/d.go (implicit)
+    unchanged between base and HEAD
+
+Section's own lines (3-6):
+  document changed between base and HEAD: no
+  changes touching these lines: none
+
+Lockfile doc-drift.lock:
+  entry differs from the mapped code in:
+    src/a.go
+  effect: none

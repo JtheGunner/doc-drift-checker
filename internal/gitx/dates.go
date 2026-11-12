@@ -42,14 +42,21 @@ func (c *Client) CommitTimes(path string) ([]CommitTime, error) {
 // LatestTime returns the newest committer time among the commits that are not
 // in ignored. It reports false when no commit remains.
 func LatestTime(commits []CommitTime, ignored map[string]bool) (int64, bool) {
-	var latest int64
+	latest, ok := LatestCommit(commits, ignored)
+	return latest.Time, ok
+}
+
+// LatestCommit returns the newest commit (by committer time; the first one in
+// list order on a tie) that is not in ignored. It reports false when none remains.
+func LatestCommit(commits []CommitTime, ignored map[string]bool) (CommitTime, bool) {
+	var latest CommitTime
 	found := false
 	for _, commit := range commits {
 		if ignored[commit.Hash] {
 			continue
 		}
-		if !found || commit.Time > latest {
-			latest, found = commit.Time, true
+		if !found || commit.Time > latest.Time {
+			latest, found = commit, true
 		}
 	}
 	return latest, found
