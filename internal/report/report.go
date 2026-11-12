@@ -4,6 +4,7 @@
 //
 //	{
 //	  "schemaVersion": 1,
+//	  "mode": "diff",
 //	  "base": "main",
 //	  "drifts": [
 //	    {
@@ -18,13 +19,15 @@
 // Fields:
 //
 //   - schemaVersion: integer, bumped on incompatible changes
-//   - base: the base reference that was compared (base...HEAD)
+//   - mode: "diff" (base...HEAD was compared) or "history" (commit dates were compared)
+//   - base: the base reference that was compared (base...HEAD); the empty string in history mode
 //   - drifts: always an array, empty when nothing drifted; ordered by document, then section position
 //   - doc: documentation file, slash-separated, relative to the repository root
 //   - section: heading text of the drifted section
 //   - line: 1-based first line of the section in doc
-//   - files: always an array; the changed files that triggered the drift, sorted;
-//     a renamed file is written as "old -> new", a deleted file by its old path
+//   - files: always an array; the files that triggered the drift, sorted. In diff
+//     mode these are the changed files (a renamed file is written as "old -> new",
+//     a deleted file by its old path); in history mode the files newer than the section
 //
 // New optional fields may be added without a version bump; consumers must ignore unknown fields.
 package report
@@ -40,6 +43,12 @@ import (
 // SchemaVersion is the version of the JSON output schema.
 const SchemaVersion = 1
 
+// Detection modes reported in the JSON "mode" field.
+const (
+	ModeDiff    = "diff"
+	ModeHistory = "history"
+)
+
 type jsonDrift struct {
 	Doc     string   `json:"doc"`
 	Section string   `json:"section"`
@@ -49,13 +58,15 @@ type jsonDrift struct {
 
 type jsonReport struct {
 	SchemaVersion int         `json:"schemaVersion"`
+	Mode          string      `json:"mode"`
 	Base          string      `json:"base"`
 	Drifts        []jsonDrift `json:"drifts"`
 }
 
 // WriteJSON writes the drifts as indented JSON following the documented schema.
-func WriteJSON(w io.Writer, base string, drifts []detect.Drift) error {
-	out := jsonReport{SchemaVersion: SchemaVersion, Base: base, Drifts: make([]jsonDrift, 0, len(drifts))}
+// base is empty in history mode.
+func WriteJSON(w io.Writer, mode, base string, drifts []detect.Drift) error {
+	out := jsonReport{SchemaVersion: SchemaVersion, Mode: mode, Base: base, Drifts: make([]jsonDrift, 0, len(drifts))}
 	for _, d := range drifts {
 		files := d.Files
 		if files == nil {
