@@ -90,3 +90,32 @@ func TestReadRegularFile(t *testing.T) {
 		wantRejected(t, err, "dir")
 	})
 }
+
+func TestReadRegularFileLimit(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "five.txt"), "12345")
+	symlink(t, filepath.Join(root, "five.txt"), filepath.Join(root, "link.txt"))
+
+	t.Run("at the limit", func(t *testing.T) {
+		got, err := ReadRegularFileLimit(root, "five.txt", 5)
+		if err != nil || string(got) != "12345" {
+			t.Fatalf("got %q, %v", got, err)
+		}
+	})
+	t.Run("above the limit", func(t *testing.T) {
+		_, err := ReadRegularFileLimit(root, "five.txt", 4)
+		if err == nil || !strings.Contains(err.Error(), "five.txt") || !strings.Contains(err.Error(), "larger than 4 bytes") {
+			t.Fatalf("error = %v", err)
+		}
+	})
+	t.Run("missing file keeps not-exist", func(t *testing.T) {
+		_, err := ReadRegularFileLimit(root, "missing.txt", 5)
+		if !errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("error %v should wrap fs.ErrNotExist", err)
+		}
+	})
+	t.Run("symlink is rejected", func(t *testing.T) {
+		_, err := ReadRegularFileLimit(root, "link.txt", 5)
+		wantRejected(t, err, "link.txt")
+	})
+}

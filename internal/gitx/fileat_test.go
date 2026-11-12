@@ -2,6 +2,9 @@ package gitx_test
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/JtheGunner/doc-drift-checker/internal/gitx"
@@ -92,5 +95,39 @@ func TestFileSizeAt(t *testing.T) {
 	}
 	if _, err := c.FileSizeAt("HEAD", "missing.go"); !errors.Is(err, gitx.ErrNotExist) {
 		t.Fatalf("missing file error = %v, want ErrNotExist", err)
+	}
+}
+
+func TestDirtyFiles(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Write("clean.go", "package clean\n")
+	r.Write("worktree.go", "package a\n")
+	r.Write("staged.go", "package b\n")
+	r.Write("deleted.go", "package c\n")
+	r.Write("dir/star*.go", "package d\n")
+	r.Commit("base")
+	c := gitx.New(r.Dir)
+
+	got, err := c.DirtyFiles()
+	if err != nil || len(got) != 0 {
+		t.Fatalf("clean tree: %v, %v", got, err)
+	}
+
+	r.Write("worktree.go", "package a // edited\n")
+	r.Write("staged.go", "package b // edited\n")
+	r.Git("add", "staged.go")
+	if err := os.Remove(filepath.Join(r.Dir, "deleted.go")); err != nil {
+		t.Fatal(err)
+	}
+	r.Write("dir/star*.go", "package d // edited\n")
+	r.Write("untracked.go", "package u\n")
+
+	got, err = c.DirtyFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"deleted.go", "dir/star*.go", "staged.go", "worktree.go"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("DirtyFiles = %v, want %v", got, want)
 	}
 }

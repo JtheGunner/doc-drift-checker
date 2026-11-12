@@ -34,6 +34,10 @@ func runHistoryCheck(ignoreRevsFile string) (checkResult, error) {
 	if err := git.EnsureFullHistory(); err != nil {
 		return checkResult{}, err
 	}
+	locked, err := loadLock(in.root)
+	if err != nil {
+		return checkResult{}, err
+	}
 	headFiles, err := git.HeadFiles()
 	if err != nil {
 		return checkResult{}, err
@@ -73,6 +77,12 @@ func runHistoryCheck(ignoreRevsFile string) (checkResult, error) {
 		}
 	}
 	drifts := detect.History(detect.HistoryInput{Docs: docs, SectionDates: sectionDates, FileDates: dates.files})
+	// A lockfile entry takes precedence over blame dating for its section.
+	verdicts, err := lockVerdicts(git, dates.filter, docs, locked)
+	if err != nil {
+		return checkResult{}, err
+	}
+	drifts = detect.ApplyLock(docs, drifts, verdicts, true)
 	return checkResult{drifts: drifts, failOn: in.cfg.Severity.FailOn}, nil
 }
 
