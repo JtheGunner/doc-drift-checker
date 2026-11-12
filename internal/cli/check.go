@@ -9,6 +9,7 @@ import (
 
 	"github.com/JtheGunner/doc-drift-checker/internal/detect"
 	"github.com/JtheGunner/doc-drift-checker/internal/gitx"
+	"github.com/JtheGunner/doc-drift-checker/internal/relevance"
 	"github.com/JtheGunner/doc-drift-checker/internal/report"
 )
 
@@ -92,7 +93,31 @@ func runCheck(base, format string) ([]detect.Drift, error) {
 		}
 		docChanges[doc.Doc] = lineRanges(hunks)
 	}
-	return detect.Detect(detect.Input{Docs: docs, Changes: detectChanges(changes), DocChanges: docChanges}), nil
+	relevant, err := relevantChanges(in.git, base, relevance.NewFilter(in.cfg.Ignore), changes)
+	if err != nil {
+		return nil, err
+	}
+	return detect.Detect(detect.Input{Docs: docs, Changes: detectChanges(relevant), DocChanges: docChanges}), nil
+}
+
+// relevantChanges drops the changes that cannot make documentation stale:
+// ignored paths and whitespace-only modifications. Documentation edits are not
+// filtered here; they are read from the unfiltered change list.
+func relevantChanges(git *gitx.Client, base string, filter relevance.Filter, changes []gitx.Change) ([]gitx.Change, error) {
+	relevant := make([]gitx.Change, 0, len(changes))
+	for _, c := range changes {
+		whitespaceOnly := false
+		if filter.NeedsContentCheck(c) {
+			var err error
+			if whitespaceOnly, err = git.WhitespaceOnly(base, c); err != nil {
+				return nil, err
+			}
+		}
+		if filter.Relevant(c, whitespaceOnly) {
+			relevant = append(relevant, c)
+		}
+	}
+	return relevant, nil
 }
 
 // withRemovedPaths returns tracked plus the paths that existed at the base but not at HEAD.

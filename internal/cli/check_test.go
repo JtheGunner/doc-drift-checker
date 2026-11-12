@@ -263,3 +263,105 @@ func TestCheckNoDriftJSONHasEmptyArray(t *testing.T) {
 		t.Fatalf("got:\n%s\nwant:\n%s", out, want)
 	}
 }
+
+// relevanceReadme maps one section to files in ignored locations and one to a relevant file.
+const relevanceReadme = "# Project\n\n## Usage\n\nRun `src/lib.go` to start.\n\n## Quality\n\n<!-- drift: src/lib_test.go, go.sum, vendor/**, src/api.pb.go -->\n\nQuality notes.\n"
+
+func relevanceRepo(t *testing.T, extra ...string) *testutil.Repo {
+	t.Helper()
+	r := testutil.NewRepo(t)
+	r.Write("README.md", relevanceReadme)
+	r.Write("src/lib.go", "package src\n\nfunc A() {\n\tx := 1\n}\n")
+	r.Write("src/lib_test.go", "package src\n")
+	r.Write("go.sum", "a\n")
+	r.Write("vendor/mod/m.go", "package mod\n")
+	r.Write("src/api.pb.go", "package src\n")
+	for i := 0; i+1 < len(extra); i += 2 {
+		r.Write(extra[i], extra[i+1])
+	}
+	r.Commit("base")
+	r.Branch("feature")
+	t.Chdir(r.Dir)
+	return r
+}
+
+func TestCheckIgnoredFilesDoNotDrift(t *testing.T) {
+	tests := []struct{ name, path string }{
+		{"test file", "src/lib_test.go"},
+		{"lockfile", "go.sum"},
+		{"vendor path", "vendor/mod/m.go"},
+		{"generated file", "src/api.pb.go"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := relevanceRepo(t)
+			r.CommitFile(tt.path, "changed content\n", "change ignored file")
+			expectSections(t, checkJSON(t, 0))
+		})
+	}
+}
+
+func TestCheckIgnoredAndRelevantFilesListOnlyRelevant(t *testing.T) {
+	r := relevanceRepo(t)
+	r.Write("src/lib_test.go", "package src\n\nvar X = 1\n")
+	r.Write("src/lib.go", "package src\n\nfunc B() {}\n")
+	r.Commit("both")
+
+	drifts := checkJSON(t, cli.ExitDrift)
+	expectSections(t, drifts, "Usage")
+	if got := strings.Join(drifts[0].Files, ","); got != "src/lib.go" {
+		t.Fatalf("files = %q, want only src/lib.go", got)
+	}
+}
+
+func TestCheckWhitespaceOnlyChangeDoesNotDrift(t *testing.T) {
+	r := relevanceRepo(t)
+	r.CommitFile("src/lib.go", "package src\n\n\nfunc A() {\n    x := 1   \n}\n", "reformat")
+	expectSections(t, checkJSON(t, 0))
+}
+
+func TestCheckWhitespaceAndRealChangeDrifts(t *testing.T) {
+	r := relevanceRepo(t)
+	r.CommitFile("src/lib.go", "package src\n\nfunc A() {\n    x := 2\n}\n", "reformat and change")
+	expectSections(t, checkJSON(t, cli.ExitDrift), "Usage")
+}
+
+func TestCheckCustomIgnoreReplacesDefaults(t *testing.T) {
+	r := relevanceRepo(t, ".docdrift.yaml", "ignore: [\"docs/**\"]\n")
+	r.CommitFile("src/lib_test.go", "package src\n\nvar X = 1\n", "change test file")
+	// The default list is replaced, so the test file is relevant now.
+	expectSections(t, checkJSON(t, cli.ExitDrift), "Quality")
+}
+
+func TestCheckCustomIgnoreAppliesToCustomPaths(t *testing.T) {
+	r := relevanceRepo(t, ".docdrift.yaml", "ignore: [\"src/lib.go\"]\n")
+	r.CommitFile("src/lib.go", "package src\n\nfunc B() {}\n", "change ignored by config")
+	expectSections(t, checkJSON(t, 0))
+}
+
+func TestCheckEmptyIgnoreDisablesPathIgnoring(t *testing.T) {
+	r := relevanceRepo(t, ".docdrift.yaml", "ignore: []\n")
+	r.CommitFile("go.sum", "b\n", "change lockfile")
+	expectSections(t, checkJSON(t, cli.ExitDrift), "Quality")
+}
+
+func TestCheckRenameAcrossIgnoredBoundaryStaysRelevant(t *testing.T) {
+	t.Run("into ignored path", func(t *testing.T) {
+		r := relevanceRepo(t)
+		r.Move("src/lib.go", "src/lib_gen.go")
+		r.Commit("rename into generated name")
+		expectSections(t, checkJSON(t, cli.ExitDrift), "Usage")
+	})
+	t.Run("out of ignored path", func(t *testing.T) {
+		r := relevanceRepo(t)
+		r.Move("src/lib_test.go", "src/lib_check.go")
+		r.Commit("rename out of test name")
+		expectSections(t, checkJSON(t, cli.ExitDrift), "Quality")
+	})
+	t.Run("within ignored paths", func(t *testing.T) {
+		r := relevanceRepo(t)
+		r.Move("src/lib_test.go", "src/other_test.go")
+		r.Commit("rename test file")
+		expectSections(t, checkJSON(t, 0))
+	})
+}
