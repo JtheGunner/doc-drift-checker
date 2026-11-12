@@ -201,7 +201,7 @@ func evaluateDiff(base, section string) (evalResult, error) {
 	if err != nil {
 		return evalResult{}, err
 	}
-	commits, err := commitDetails(in.git, base, changes, target)
+	commits, err := commitDetails(gitx.New(in.root), base, changes, target)
 	if err != nil {
 		return evalResult{}, err
 	}
