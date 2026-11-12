@@ -21,7 +21,19 @@ import (
 // the value only when no type is declared). Parameter and receiver names, bodies,
 // comments, imports, unexported declarations, formatting and declaration order
 // never count. A side that does not parse counts as changed.
+//
+// Expanding grouped names ("a, b int" is two parameters) can blow up on hostile
+// sources with nested groups, so before any expansion the analyzer bounds the
+// expanded size of each symbol (maxSymbolNodes) and of the whole file
+// (maxFileNodes); a source above either limit counts as changed (fail closed).
 type goAnalyzer struct{}
+
+// Size limits, in AST nodes after expansion of grouped names. Real code stays
+// orders of magnitude below them.
+const (
+	maxSymbolNodes = 1 << 14
+	maxFileNodes   = 1 << 17
+)
 
 func (goAnalyzer) Extensions() []string { return []string{".go"} }
 
@@ -54,33 +66,42 @@ func goExportedAPI(src []byte) (api map[string]string, ok bool) {
 	if err != nil {
 		return nil, false
 	}
+	budget := &nodeBudget{}
 	for _, decl := range file.Decls {
+		within := true
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
-			addGoFunc(api, d)
+			within = addGoFunc(api, budget, d)
 		case *ast.GenDecl:
-			addGoGenDecl(api, d)
+			within = addGoGenDecl(api, budget, d)
+		}
+		if !within {
+			return nil, false
 		}
 	}
 	return api, true
 }
 
-func addGoFunc(api map[string]string, d *ast.FuncDecl) {
+func addGoFunc(api map[string]string, budget *nodeBudget, d *ast.FuncDecl) bool {
 	if !d.Name.IsExported() {
-		return
+		return true
 	}
 	key := "func " + d.Name.Name
 	if d.Recv != nil && len(d.Recv.List) == 1 {
 		base := receiverBaseName(d.Recv.List[0].Type)
 		if !ast.IsExported(base) {
-			return
+			return true
 		}
 		key = "method " + base + "." + d.Name.Name
 	}
 	d.Body = nil
 	d.Doc = nil
+	if !budget.allow(expandedSize(d)) {
+		return false
+	}
 	canonicalize(d)
 	api[key] = printNode(d)
+	return true
 }
 
 // receiverBaseName returns the receiver's type name without pointer and type arguments.
@@ -103,7 +124,7 @@ func receiverBaseName(expr ast.Expr) string {
 	}
 }
 
-func addGoGenDecl(api map[string]string, d *ast.GenDecl) {
+func addGoGenDecl(api map[string]string, budget *nodeBudget, d *ast.GenDecl) bool {
 	var lastType ast.Expr
 	var lastValues []ast.Expr
 	for index, spec := range d.Specs {
@@ -113,6 +134,9 @@ func addGoGenDecl(api map[string]string, d *ast.GenDecl) {
 				continue
 			}
 			s.Doc, s.Comment = nil, nil
+			if !budget.allow(expandedSize(s)) {
+				return false
+			}
 			pruneUnexported(s.Type)
 			canonicalize(s)
 			api["type "+s.Name.Name] = printNode(s)
@@ -125,25 +149,41 @@ func addGoGenDecl(api map[string]string, d *ast.GenDecl) {
 					lastType, lastValues = s.Type, s.Values
 				}
 			}
-			addGoValueSpec(api, d.Tok, s, index)
+			if !addGoValueSpec(api, budget, d.Tok, s, index) {
+				return false
+			}
 		}
 	}
+	return true
 }
 
-func addGoValueSpec(api map[string]string, tok token.Token, s *ast.ValueSpec, index int) {
+func addGoValueSpec(api map[string]string, budget *nodeBudget, tok token.Token, s *ast.ValueSpec, index int) bool {
 	for i, name := range s.Names {
 		if !name.IsExported() {
 			continue
+		}
+		value := s.Values
+		if len(s.Values) == len(s.Names) {
+			value = s.Values[i : i+1]
+		}
+		withValue := tok == token.CONST || s.Type == nil
+		cost := 1
+		if s.Type != nil {
+			cost += expandedSize(s.Type)
+		}
+		if withValue {
+			for _, v := range value {
+				cost += expandedSize(v)
+			}
+		}
+		if !budget.allow(cost) {
+			return false
 		}
 		text := ""
 		if s.Type != nil {
 			text = printNode(canonicalize(s.Type))
 		}
-		if tok == token.CONST || s.Type == nil {
-			value := s.Values
-			if len(s.Values) == len(s.Names) {
-				value = s.Values[i : i+1]
-			}
+		if withValue {
 			for _, v := range value {
 				text += " = " + printNode(canonicalize(v))
 			}
@@ -154,6 +194,76 @@ func addGoValueSpec(api map[string]string, tok token.Token, s *ast.ValueSpec, in
 		}
 		api[tok.String()+" "+name.Name] = text
 	}
+	return true
+}
+
+// nodeBudget accumulates the expanded size of everything canonicalized in one file.
+type nodeBudget struct {
+	total int
+}
+
+// allow charges size against the budget and reports whether both the per-symbol
+// and the per-file limit still hold.
+func (b *nodeBudget) allow(size int) bool {
+	if size > maxSymbolNodes {
+		return false
+	}
+	b.total += size
+	return b.total <= maxFileNodes
+}
+
+// expandedSize is an upper bound of the node count of node after grouped names
+// are expanded into one field each. It reads the tree before any expansion and
+// stops counting once the symbol limit is exceeded, so it is cheap for any
+// input and never materializes the expansion. The result is at most
+// maxSymbolNodes+1.
+func expandedSize(node ast.Node) int {
+	return estimateNodes(reflect.ValueOf(node), maxSymbolNodes)
+}
+
+var fieldListType = reflect.TypeOf(ast.FieldList{})
+
+// estimateNodes counts the nodes below v, multiplying the type of every field
+// that declares several names, and returns at most limit+1.
+func estimateNodes(v reflect.Value, limit int) int {
+	switch v.Kind() {
+	case reflect.Pointer, reflect.Interface:
+		if v.IsNil() {
+			return 0
+		}
+		return estimateNodes(v.Elem(), limit)
+	case reflect.Slice:
+		total := 0
+		for i := 0; i < v.Len() && total <= limit; i++ {
+			total += estimateNodes(v.Index(i), limit-total)
+		}
+		return min(total, limit+1)
+	case reflect.Struct:
+		if v.Type() == fieldListType {
+			return estimateFieldList(v.FieldByName("List"), limit)
+		}
+		total := 1
+		for i := 0; i < v.NumField() && total <= limit; i++ {
+			total += estimateNodes(v.Field(i), limit-total)
+		}
+		return min(total, limit+1)
+	default:
+		return 0
+	}
+}
+
+func estimateFieldList(list reflect.Value, limit int) int {
+	total := 1
+	for i := 0; i < list.Len() && total <= limit; i++ {
+		field := list.Index(i).Interface().(*ast.Field)
+		copies := max(len(field.Names), 1)
+		inner := estimateNodes(reflect.ValueOf(field.Type), limit)
+		if copies*(inner+1) > limit {
+			return limit + 1
+		}
+		total += copies * (inner + 1)
+	}
+	return min(total, limit+1)
 }
 
 // pruneUnexported removes everything from struct and interface types that is
