@@ -17,7 +17,7 @@ func checkRepo(t *testing.T) *testutil.Repo {
 	t.Helper()
 	r := testutil.NewRepo(t)
 	r.Write("README.md", checkReadme)
-	r.Write("src/lib.go", "package src\n")
+	r.Write("src/lib.go", "package src\n\nfunc Lib() {}\n")
 	r.Write("src/flags.go", "package src\n")
 	r.Write("other/o.go", "package other\n")
 	r.Commit("base")
@@ -299,7 +299,7 @@ func TestCheckWhitespaceOnlyChangeDoesNotDrift(t *testing.T) {
 
 func TestCheckWhitespaceAndRealChangeDrifts(t *testing.T) {
 	r := relevanceRepo(t)
-	r.CommitFile("src/lib.go", "package src\n\nfunc A() {\n    x := 2\n}\n", "reformat and change")
+	r.CommitFile("src/lib.go", "package src\n\nfunc A(n int) {\n    x := 1\n}\n", "reformat and change signature")
 	expectSections(t, checkJSON(t, cli.ExitDrift), "Usage")
 }
 

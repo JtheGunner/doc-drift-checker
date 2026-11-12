@@ -60,3 +60,26 @@ Documented limits (also in the `check` help and the `internal/detect` package co
 ## Relevance filters
 
 `internal/relevance` (pure) drops changes before `detect.Detect`: a change is irrelevant when all its paths (new and, for renames/copies, old) match an `ignore` glob, or it is a modification (status M) whose diff is whitespace-only (`gitx.WhitespaceOnly`: `git diff -w --ignore-blank-lines`). Additions, deletions, renames and copies are never dropped as whitespace-only. Documentation edits are never filtered. `check` applies the filter in `internal/cli/check.go`; `links` output is unaffected. Glob matching lives in `internal/glob` (`Match`, `**` supported) and is shared with `internal/links`.
+
+## Symbol relevance (languages)
+
+On top of the path and whitespace filters, `relevance.AnalyzerSet` (built from `relevance.DefaultAnalyzers()`) drops changes whose public interface is unchanged. Pipeline per changed file in diff mode: path ignore, whitespace-only, symbol analyzer (status M, A or D, and only when an analyzer is registered for the file extension). Everything else, including every other language, falls back to path-based relevance (stays relevant). Old content is read with `gitx.FileAt(gitx.MergeBase(base), path)`, new content with `gitx.FileAt("HEAD", path)`; analyzers receive bytes only and stay pure.
+
+Adding a language needs only an implementation of `relevance.SymbolAnalyzer` plus one line in `DefaultAnalyzers()` (`internal/relevance/symbols.go`):
+
+```go
+type pyAnalyzer struct{}
+
+func (pyAnalyzer) Extensions() []string { return []string{".py"} } // lower-case, with the dot
+func (pyAnalyzer) APIChanged(oldSrc, newSrc []byte) (bool, error) { /* nil src = file absent */ }
+
+// in DefaultAnalyzers: return []SymbolAnalyzer{goAnalyzer{}, pyAnalyzer{}}
+```
+
+Be conservative: when in doubt, return true; an analyzer error is also treated as "changed". Test it table-driven, including the cases that must not be reported.
+
+Go analyzer (`internal/relevance/goapi.go`, `go/parser` without comments) compares the canonical exported API of both sides. Counted: exported functions; exported methods on exported receiver types (receiver kind and type parameters count, parameter and receiver names do not); exported types (structs: exported fields with their tags and every embedded field, exported or not, because promoted members are public API; interfaces: exported methods and all embeds); exported consts (type, value, position in an `iota` group) and vars (type, or the value when no type is declared). Also counted: the package name and the build constraint lines (`//go:build` and legacy `// +build` before the package clause, normalized via `go/build/constraint`; read by a second, package-clause-only parse with comments, so no other comment is ever looked at). Not counted: bodies, comments and doc comments, imports, unexported declarations and fields, methods on unexported types, formatting, declaration order. Conservative rules: a side that fails to parse means changed; an added file is changed iff it has exported API, a deleted file iff it had (package name and build lines alone do not count there); renames and copies are never dropped. Size cap (fail closed): grouped names expand to one field each (`a, b int` is two parameters), which nested groups can blow up exponentially, so `expandedSize` bounds the expanded node count before any expansion, per symbol (`maxSymbolNodes`) and per file (`maxFileNodes`, includes const group repeats); above either limit the file counts as changed (`APIChanged` returns true, no error) without expanding. Keep any new analysis step behind that estimate. Hostile-input bounds (also fail closed, checked before any recursive pass): sources above `maxSourceBytes` (8 MiB) and parsed trees nested deeper than `maxASTDepth` (1024 levels, measured by the iterative `exceedsDepth`, so a chain of a million operators cannot overflow the stack; the parser itself builds binary chains iteratively and rejects extreme bracket nesting with a parse error, which also counts as changed) count as changed. Every recursive pass (`expandedSize`, `canonicalize`, `pruneUnexported`, printing) must only run on trees under these caps. Very long constant chains (over about a thousand operands) are therefore always reported as changed.
+
+Known limits of the Go analyzer (pinned by tests): there is no type-checking, so exported consts, vars and types that refer to unexported package-level identifiers are compared textually; a change of the referenced declaration (`const Max = max` with `max` changing, `type Foo bar` with `bar` changing, the body of an unexported embedded type) is not detected, only the embed line itself counts. Adding or removing an unexported spec inside a const group shifts the `iota` group index of later exported consts and is reported as changed (conservative false positive). An unexported method added to or removed from an exported interface breaks external implementers but is not compared (only the exported API is). Other directives (`//go:generate`, `//go:linkname`, `//go:embed`, cgo preambles) do not change the declared exported symbols or types and are ignored like all other comments; tests pin this.
+
+Known limit: symbol relevance applies to diff mode only; history mode compares commit dates and is unchanged.
