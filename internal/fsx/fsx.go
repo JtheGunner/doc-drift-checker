@@ -18,6 +18,19 @@ import (
 // open handle, so the file cannot be swapped in between. A missing file
 // returns an error wrapping fs.ErrNotExist.
 func ReadRegularFile(root, rel string) ([]byte, error) {
+	return readRegularFile(root, rel, -1)
+}
+
+// ReadRegularFileLimit is ReadRegularFile for untrusted files that must stay
+// small: a file larger than limit bytes is an error, and at most limit+1 bytes
+// are ever read.
+func ReadRegularFileLimit(root, rel string, limit int64) ([]byte, error) {
+	return readRegularFile(root, rel, limit)
+}
+
+// readRegularFile reads rel as described at ReadRegularFile; a negative limit
+// means no limit.
+func readRegularFile(root, rel string, limit int64) ([]byte, error) {
 	full := filepath.Join(root, rel)
 	r, err := os.OpenRoot(root)
 	if err != nil {
@@ -44,7 +57,17 @@ func ReadRegularFile(root, rel string) ([]byte, error) {
 	if !opened.Mode().IsRegular() || !os.SameFile(link, opened) {
 		return nil, notRegular(full)
 	}
-	return io.ReadAll(f)
+	if limit < 0 {
+		return io.ReadAll(f)
+	}
+	data, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("%s is larger than %d bytes", full, limit)
+	}
+	return data, nil
 }
 
 // rejectOrPassThrough keeps not-exist errors intact and reports every other
