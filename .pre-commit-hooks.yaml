@@ -1,0 +1,8 @@
+- id: doc-drift-checker
+  name: doc-drift-checker
+  description: Fail when code changed but the documentation section describing it did not.
+  entry: doc-drift-checker check
+  language: golang
+  pass_filenames: false
+  always_run: true
+  stages: [pre-push]
