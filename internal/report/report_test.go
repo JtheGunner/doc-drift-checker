@@ -5,13 +5,22 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/JtheGunner/doc-drift-checker/internal/config"
 	"github.com/JtheGunner/doc-drift-checker/internal/detect"
+	"github.com/JtheGunner/doc-drift-checker/internal/docparse"
 	"github.com/JtheGunner/doc-drift-checker/internal/report"
 )
 
 var sample = []detect.Drift{
-	{Doc: "README.md", Section: "Usage", Line: 3, Files: []string{"a.go", "old.go -> new.go"}},
-	{Doc: "docs/x.md", Section: "Flags", Line: 9, Files: []string{"b.go"}},
+	{
+		Doc: "README.md", Section: "Usage", Line: 3, Files: []string{"a.go", "old.go -> new.go"},
+		Severity: config.SeverityHigh,
+		BrokenReferences: []docparse.Reference{
+			{Kind: docparse.KindFlag, Value: "--gone", Line: 5},
+			{Kind: docparse.KindEnvVar, Value: "APP_TOKEN", Line: 6},
+		},
+	},
+	{Doc: "docs/x.md", Section: "Flags", Line: 9, Files: []string{"b.go"}, Severity: config.SeverityLow},
 }
 
 func TestWriteText(t *testing.T) {
@@ -19,8 +28,9 @@ func TestWriteText(t *testing.T) {
 	if err := report.WriteText(&buf, sample); err != nil {
 		t.Fatal(err)
 	}
-	want := "Usage\n  README.md:3\n  changed code:\n    a.go\n    old.go -> new.go\n" +
-		"Flags\n  docs/x.md:9\n  changed code:\n    b.go\n"
+	want := "[high] Usage\n  README.md:3\n  changed code:\n    a.go\n    old.go -> new.go\n" +
+		"  broken references:\n    flag --gone (README.md:5)\n    env-var APP_TOKEN (README.md:6)\n" +
+		"[low] Flags\n  docs/x.md:9\n  changed code:\n    b.go\n"
 	if buf.String() != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", buf.String(), want)
 	}
@@ -61,6 +71,19 @@ func TestWriteJSONGolden(t *testing.T) {
       "files": [
         "a.go",
         "old.go -> new.go"
+      ],
+      "severity": "high",
+      "brokenReferences": [
+        {
+          "kind": "flag",
+          "value": "--gone",
+          "line": 5
+        },
+        {
+          "kind": "env-var",
+          "value": "APP_TOKEN",
+          "line": 6
+        }
       ]
     }
   ]
@@ -91,5 +114,27 @@ func TestWriteJSONEmptyListsAreArrays(t *testing.T) {
 	}
 	if !bytes.Contains(buf.Bytes(), []byte(`"files": []`)) {
 		t.Errorf("nil files must render as []: %s", buf.String())
+	}
+}
+
+func TestWriteJSONZeroValueDriftIsLowWithEmptyReferences(t *testing.T) {
+	var buf bytes.Buffer
+	if err := report.WriteJSON(&buf, report.ModeHistory, "", []detect.Drift{{Doc: "a", Section: "s", Line: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"\"severity\": \"low\"", "\"brokenReferences\": []"} {
+		if !bytes.Contains(buf.Bytes(), []byte(want)) {
+			t.Errorf("missing %s in %s", want, buf.String())
+		}
+	}
+}
+
+func TestWriteTextZeroValueSeverityIsLow(t *testing.T) {
+	var buf bytes.Buffer
+	if err := report.WriteText(&buf, []detect.Drift{{Doc: "a.md", Section: "S", Line: 1, Files: []string{"x.go"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if want := "[low] S\n  a.md:1\n  changed code:\n    x.go\n"; buf.String() != want {
+		t.Fatalf("got %q", buf.String())
 	}
 }
