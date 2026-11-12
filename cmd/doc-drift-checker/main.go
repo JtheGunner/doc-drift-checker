@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/JtheGunner/doc-drift-checker/internal/cli"
@@ -12,7 +13,9 @@ import (
 var version = "dev"
 
 func main() {
-	if err := cli.NewRootCmd(version).Execute(); err != nil {
-		os.Exit(1)
+	err := cli.NewRootCmd(version).Execute()
+	if err != nil && err.Error() != "" {
+		fmt.Fprintln(os.Stderr, "error:", err)
 	}
+	os.Exit(cli.ExitCode(err))
 }

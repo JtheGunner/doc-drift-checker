@@ -1,0 +1,59 @@
+package cli
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/JtheGunner/doc-drift-checker/internal/config"
+	"github.com/JtheGunner/doc-drift-checker/internal/docparse"
+	"github.com/JtheGunner/doc-drift-checker/internal/fsx"
+	"github.com/JtheGunner/doc-drift-checker/internal/gitx"
+	"github.com/JtheGunner/doc-drift-checker/internal/links"
+)
+
+// repoInputs are the inputs shared by commands that resolve documentation links:
+// the repository root, its config and the tracked files.
+type repoInputs struct {
+	git     *gitx.Client
+	root    string
+	cfg     config.Config
+	tracked []string
+}
+
+// loadRepoInputs gathers the repository root, config and tracked files of the
+// repository containing the working directory.
+func loadRepoInputs() (repoInputs, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return repoInputs{}, fmt.Errorf("get working directory: %w", err)
+	}
+	git := gitx.New(wd)
+	root, err := git.Root()
+	if err != nil {
+		return repoInputs{}, fmt.Errorf("find repository root: %w", err)
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		return repoInputs{}, err
+	}
+	tracked, err := git.TrackedFiles()
+	if err != nil {
+		return repoInputs{}, err
+	}
+	return repoInputs{git: git, root: root, cfg: cfg, tracked: tracked}, nil
+}
+
+// resolveDocs reads every configured documentation file and resolves its
+// sections against the given file list.
+func (in repoInputs) resolveDocs(files []string) ([]links.DocLinks, error) {
+	docs := []links.DocLinks{}
+	for _, doc := range links.MatchDocs(in.cfg.Docs, in.tracked) {
+		src, err := fsx.ReadRegularFile(in.root, filepath.FromSlash(doc))
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", doc, err)
+		}
+		docs = append(docs, links.Resolve(doc, docparse.ParseSections(src), in.cfg, files))
+	}
+	return docs, nil
+}
