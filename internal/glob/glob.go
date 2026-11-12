@@ -1,11 +1,11 @@
-package links
+package glob
 
 import (
 	"path"
 	"strings"
 )
 
-// matchGlob reports whether the slash-separated name matches glob.
+// Match reports whether the slash-separated name matches glob.
 // A "**" segment matches zero or more path segments, except a trailing "**",
 // which needs at least one; every other segment is matched with path.Match,
 // so "*" and "?" never cross a "/". Malformed patterns match nothing (config
@@ -14,7 +14,7 @@ import (
 // Runs of "**" are collapsed and matching is memoized on (pattern index,
 // name index), so the cost is bounded by pattern segments times name segments
 // even for hostile patterns.
-func matchGlob(glob, name string) bool {
+func Match(glob, name string) bool {
 	pattern := collapseDoubleStars(strings.Split(glob, "/"))
 	names := strings.Split(name, "/")
 	// memo[p][n]: 0 = unknown, 1 = no match, 2 = match.
