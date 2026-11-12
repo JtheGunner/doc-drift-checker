@@ -26,7 +26,7 @@ func TestOwnRange(t *testing.T) {
 	}
 }
 
-func TestDetectHistory(t *testing.T) {
+func TestHistory(t *testing.T) {
 	usage := detect.SectionKey{Doc: "README.md", Line: 3}
 	flags := detect.SectionKey{Doc: "README.md", Line: 7}
 	other := detect.SectionKey{Doc: "README.md", Line: 11}
@@ -80,7 +80,7 @@ func TestDetectHistory(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := detect.DetectHistory(detect.HistoryInput{Docs: docs(), SectionDates: tt.sections, FileDates: tt.files})
+			got := detect.History(detect.HistoryInput{Docs: docs(), SectionDates: tt.sections, FileDates: tt.files})
 			if tt.want == nil {
 				tt.want = []detect.Drift{}
 			}

@@ -25,10 +25,10 @@ type HistoryInput struct {
 	FileDates map[string]int64
 }
 
-// DetectHistory returns the sections that have at least one linked file with a
+// History returns the sections that have at least one linked file with a
 // date strictly newer than the section's own date, in document and section order.
 // Equal dates are not drift.
-func DetectHistory(in HistoryInput) []Drift {
+func History(in HistoryInput) []Drift {
 	drifts := []Drift{}
 	for _, doc := range in.Docs {
 		for _, section := range doc.Sections {

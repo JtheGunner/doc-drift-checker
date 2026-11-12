@@ -72,7 +72,7 @@ func runHistoryCheck(ignoreRevsFile string) ([]detect.Drift, error) {
 			}
 		}
 	}
-	return detect.DetectHistory(detect.HistoryInput{Docs: docs, SectionDates: sectionDates, FileDates: dates.files}), nil
+	return detect.History(detect.HistoryInput{Docs: docs, SectionDates: sectionDates, FileDates: dates.files}), nil
 }
 
 // historyDates gathers commit dates from git. files holds only the dated,

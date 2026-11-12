@@ -2,7 +2,7 @@
 // changed while the section's own text did not.
 //
 // Two modes share the Drift type. Diff mode (Detect) compares base...HEAD.
-// History mode (DetectHistory) compares dates: see "History mode" below.
+// History mode (History) compares dates: see "History mode" below.
 //
 // Detection is pure. It takes already-gathered data (resolved links, the change
 // list and the changed line ranges per document) and never touches git or the
