@@ -16,8 +16,10 @@ import (
 )
 
 const (
-	formatText = "text"
-	formatJSON = "json"
+	formatText   = "text"
+	formatJSON   = "json"
+	formatSARIF  = "sarif"
+	formatGitHub = "github"
 )
 
 func newCheckCmd() *cobra.Command {
@@ -72,7 +74,10 @@ func newCheckCmd() *cobra.Command {
 			"Exit codes: 0 no drift (or none at or above the minimum severity), 1 drift found, " +
 			"2 usage or runtime error. --min-severity low|high sets the lowest severity that exits 1 " +
 			"(default: severity.fail-on from .docdrift.yaml, which defaults to low); all drifts are " +
-			"printed regardless. --warn-only forces 0 when drift is found.",
+			"printed regardless. --warn-only forces 0 when drift is found.\n\n" +
+			"Formats: text (default), json, sarif (SARIF 2.1.0, one result per drift, for code scanning " +
+			"uploads) and github (one ::error or ::warning workflow command per drift, shown as " +
+			"annotations in GitHub Actions; nothing is printed without drift). Exit codes are the same for every format.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			var failOn config.SeverityLevel
@@ -107,7 +112,7 @@ func newCheckCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&base, "base", "", "base reference to compare against (diff mode); without it history mode runs")
-	cmd.Flags().StringVar(&format, "format", formatText, "output format: text or json")
+	cmd.Flags().StringVar(&format, "format", formatText, "output format: text, json, sarif (SARIF 2.1.0) or github (GitHub Actions annotations)")
 	cmd.Flags().StringVar(&ignoreRevsFile, "ignore-revs-file", "", "history mode only: file of commit hashes to skip when dating (formatting commits)")
 	cmd.Flags().StringVar(&minSeverity, "min-severity", string(config.SeverityLow), "lowest severity that makes the exit code 1: low or high (default: severity.fail-on in .docdrift.yaml, else low)")
 	cmd.Flags().BoolVar(&warnOnly, "warn-only", false, "exit 0 even when drift is found")
@@ -130,6 +135,12 @@ type checkResult struct {
 }
 
 func writeReport(w io.Writer, opts checkOptions, drifts []detect.Drift) error {
+	switch opts.format {
+	case formatSARIF:
+		return report.WriteSARIF(w, drifts)
+	case formatGitHub:
+		return report.WriteGitHub(w, drifts)
+	}
 	if opts.format == formatJSON {
 		if opts.diffMode {
 			return report.WriteJSON(w, report.ModeDiff, opts.base, drifts)
@@ -142,8 +153,10 @@ func writeReport(w io.Writer, opts checkOptions, drifts []detect.Drift) error {
 // runCheck validates the flags, evaluates every section and keeps the ones
 // that ended as drift. The evaluation is shared with the explain command.
 func runCheck(opts checkOptions) (checkResult, error) {
-	if opts.format != formatText && opts.format != formatJSON {
-		return checkResult{}, fmt.Errorf("invalid --format %q: use %s or %s", opts.format, formatText, formatJSON)
+	switch opts.format {
+	case formatText, formatJSON, formatSARIF, formatGitHub:
+	default:
+		return checkResult{}, fmt.Errorf("invalid --format %q: use %s, %s, %s or %s", opts.format, formatText, formatJSON, formatSARIF, formatGitHub)
 	}
 	result, err := evaluate(evalOptions{base: opts.base, diffMode: opts.diffMode, ignoreRevsFile: opts.ignoreRevsFile})
 	if err != nil {

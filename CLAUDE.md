@@ -47,9 +47,13 @@ Origins: `annotation`, `config` (`mappings`), `implicit` (file-path and relative
 
 ## Drift check (diff mode)
 
-`check --base <ref> [--format text|json] [--warn-only]` compares `base...HEAD`. `internal/detect` is the pure core (a linked file changed and no line of the section's own range changed); `internal/cli/check.go` gathers git data. Files removed or renamed away are added to the file list used for link resolution, so sections mapped to them still trigger. Shared input gathering lives in `internal/cli/inputs.go`.
+`check --base <ref> [--format text|json|sarif|github] [--warn-only]` compares `base...HEAD`. `internal/detect` is the pure core (a linked file changed and no line of the section's own range changed); `internal/cli/check.go` gathers git data. Files removed or renamed away are added to the file list used for link resolution, so sections mapped to them still trigger. Shared input gathering lives in `internal/cli/inputs.go`.
 
 Exit codes: 0 no drift, 1 drift, 2 usage/runtime error (`cli.ExitCode`, handled in `cmd/doc-drift-checker/main.go`; tests assert the code, never `os.Exit`). `--warn-only` forces 0 on drift only. The JSON schema (`schemaVersion` 1) is documented in the `internal/report` package comment; update it there when the output changes.
+
+`--format` is `text` (default), `json`, `sarif` or `github` (anything else is exit 2). `report.WriteSARIF` writes SARIF 2.1.0 (one run, rule `doc-drift`, result per drift in report order, high = `error`, low = `warning`, location = doc at the section's first line; no tool version, the reporters do not receive it) and `report.WriteGitHub` one `::error`/`::warning` workflow command per drift (nothing without drift, no `endLine`: `Drift` carries no end line). Both reuse `report.describe` and neutralise untrusted text with `report.clean`; GitHub properties and message are escaped per the workflow command rules and capped, so repository text cannot inject a command. A SARIF test validates the output against the vendored official schema (`internal/report/testdata/sarif-schema-2.1.0.json`, unmodified, source and checksum in `sarif_test.go`) with the test-only dependency `santhosh-tekuri/jsonschema/v6`; no non-test package may import it.
+
+CI integrations at the repo root: `action.yml` (composite action: validates inputs, `go install`, fetches `origin/<base>`, runs `check --base origin/<base> --format ...`; every `${{ }}` value reaches the shell through `env:` only) and `.pre-commit-hooks.yaml` (hook `doc-drift-checker`, pre-push, runs history mode unless `args: ["--base", ...]` is given). `ci_files_test.go` pins their structure (no `${{` in `run:` blocks). Usage examples live in `docs/ci-integration.md`; keep them in sync with the action inputs.
 
 ## Drift check (history mode)
 

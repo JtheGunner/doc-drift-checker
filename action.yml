@@ -1,0 +1,82 @@
+name: doc-drift-checker
+description: Fail the job when code changed but the documentation section describing it did not.
+author: JtheGunner
+
+inputs:
+  base:
+    description: >-
+      Branch to compare against (the check runs on origin/<base>...HEAD).
+      Defaults to the pull request base branch, or the repository default branch outside pull requests.
+    required: false
+    default: ${{ github.base_ref || github.event.repository.default_branch }}
+  format:
+    description: Output format, one of text, json, sarif or github (annotations on the pull request).
+    required: false
+    default: github
+  min-severity:
+    description: Lowest severity that fails the job, low or high. Empty uses severity.fail-on from .docdrift.yaml.
+    required: false
+    default: ""
+  version:
+    description: Version of doc-drift-checker to install (a release tag such as v1.2.3, a commit hash, or latest).
+    required: false
+    default: latest
+  working-directory:
+    description: Directory of the repository to check, relative to the workspace.
+    required: false
+    default: .
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5.4.0
+      with:
+        go-version: stable
+        cache: false
+
+    - name: Run doc-drift-checker
+      shell: bash
+      env:
+        DRIFT_BASE: ${{ inputs.base }}
+        DRIFT_FORMAT: ${{ inputs.format }}
+        DRIFT_MIN_SEVERITY: ${{ inputs.min-severity }}
+        DRIFT_VERSION: ${{ inputs.version }}
+        DRIFT_WORKDIR: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+
+        fail() {
+          echo "::error title=doc-drift-checker::$1"
+          exit 2
+        }
+
+        case "$DRIFT_FORMAT" in
+          text | json | sarif | github) ;;
+          *) fail "Input 'format' must be one of text, json, sarif, github." ;;
+        esac
+        case "$DRIFT_MIN_SEVERITY" in
+          "" | low | high) ;;
+          *) fail "Input 'min-severity' must be empty, low or high." ;;
+        esac
+        if [[ -z "$DRIFT_BASE" || ! "$DRIFT_BASE" =~ ^[A-Za-z0-9_][A-Za-z0-9._/-]*$ ]]; then
+          fail "Input 'base' must be a branch name (letters, digits, '.', '_', '-', '/')."
+        fi
+        if [[ ! "$DRIFT_VERSION" =~ ^(latest|v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.+-]+)?|[0-9a-f]{7,40})$ ]]; then
+          fail "Input 'version' must be 'latest', a release tag such as v1.2.3, or a commit hash."
+        fi
+
+        bin_dir="${RUNNER_TEMP:-/tmp}/doc-drift-checker-bin"
+        GOBIN="$bin_dir" go install "github.com/JtheGunner/doc-drift-checker/cmd/doc-drift-checker@${DRIFT_VERSION}"
+
+        cd -- "$DRIFT_WORKDIR"
+        if [[ "$(git rev-parse --is-shallow-repository)" == "true" ]]; then
+          fail "The checkout is shallow. Use actions/checkout with 'fetch-depth: 0'."
+        fi
+        git fetch --no-tags origin "+refs/heads/${DRIFT_BASE}:refs/remotes/origin/${DRIFT_BASE}"
+
+        args=(check --base "origin/${DRIFT_BASE}" --format "$DRIFT_FORMAT")
+        if [[ -n "$DRIFT_MIN_SEVERITY" ]]; then
+          args+=(--min-severity "$DRIFT_MIN_SEVERITY")
+        fi
+        "$bin_dir/doc-drift-checker" "${args[@]}"

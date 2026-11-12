@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "doc-drift-checker",
+          "informationUri": "https://github.com/JtheGunner/doc-drift-checker",
+          "rules": [
+            {
+              "id": "doc-drift",
+              "shortDescription": {
+                "text": "Documentation section may be outdated"
+              },
+              "help": {
+                "text": "Code linked to a documentation section changed while the section's own text did not. Review the section and update it, or acknowledge it with doc-drift-checker ack."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            }
+          ]
+        }
+      },
+      "results": []
+    }
+  ]
+}
