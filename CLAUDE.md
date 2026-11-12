@@ -60,3 +60,24 @@ Documented limits (also in the `check` help and the `internal/detect` package co
 ## Relevance filters
 
 `internal/relevance` (pure) drops changes before `detect.Detect`: a change is irrelevant when all its paths (new and, for renames/copies, old) match an `ignore` glob, or it is a modification (status M) whose diff is whitespace-only (`gitx.WhitespaceOnly`: `git diff -w --ignore-blank-lines`). Additions, deletions, renames and copies are never dropped as whitespace-only. Documentation edits are never filtered. `check` applies the filter in `internal/cli/check.go`; `links` output is unaffected. Glob matching lives in `internal/glob` (`Match`, `**` supported) and is shared with `internal/links`.
+
+## Symbol relevance (languages)
+
+On top of the path and whitespace filters, `relevance.AnalyzerSet` (built from `relevance.DefaultAnalyzers()`) drops changes whose public interface is unchanged. Pipeline per changed file in diff mode: path ignore, whitespace-only, symbol analyzer (status M, A or D, and only when an analyzer is registered for the file extension). Everything else, including every other language, falls back to path-based relevance (stays relevant). Old content is read with `gitx.FileAt(gitx.MergeBase(base), path)`, new content with `gitx.FileAt("HEAD", path)`; analyzers receive bytes only and stay pure.
+
+Adding a language needs only an implementation of `relevance.SymbolAnalyzer` plus one line in `DefaultAnalyzers()` (`internal/relevance/symbols.go`):
+
+```go
+type pyAnalyzer struct{}
+
+func (pyAnalyzer) Extensions() []string { return []string{".py"} } // lower-case, with the dot
+func (pyAnalyzer) APIChanged(oldSrc, newSrc []byte) (bool, error) { /* nil src = file absent */ }
+
+// in DefaultAnalyzers: return []SymbolAnalyzer{goAnalyzer{}, pyAnalyzer{}}
+```
+
+Be conservative: when in doubt, return true; an analyzer error is also treated as "changed". Test it table-driven, including the cases that must not be reported.
+
+Go analyzer (`internal/relevance/goapi.go`, `go/parser` without comments) compares the canonical exported API of both sides. Counted: exported functions; exported methods on exported receiver types (receiver kind and type parameters count, parameter and receiver names do not); exported types (structs: exported fields and exported embedded types with their tags; interfaces: exported methods and all embeds); exported consts (type, value, position in an `iota` group) and vars (type, or the value when no type is declared). Not counted: bodies, comments and doc comments, imports, unexported declarations and fields, methods on unexported types, formatting, declaration order. Conservative rules: a side that fails to parse means changed; an added file is changed iff it has exported API, a deleted file iff it had; renames and copies are never dropped.
+
+Known limit: symbol relevance applies to diff mode only; history mode compares commit dates and is unchanged.
