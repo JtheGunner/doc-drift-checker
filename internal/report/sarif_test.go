@@ -28,7 +28,7 @@ func sarifSchema(t *testing.T) *jsonschema.Schema {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	doc, err := jsonschema.UnmarshalJSON(f)
 	if err != nil {
 		t.Fatal(err)
