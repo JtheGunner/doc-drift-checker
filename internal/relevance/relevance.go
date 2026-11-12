@@ -57,5 +57,5 @@ func (f Filter) Relevant(c gitx.Change, whitespaceOnly bool) bool {
 	if f.PathIgnored(c) {
 		return false
 	}
-	return !(c.Status == gitx.StatusModified && whitespaceOnly)
+	return c.Status != gitx.StatusModified || !whitespaceOnly
 }

@@ -1,3 +1,4 @@
+// Package glob matches slash-separated paths against globs with "**" support.
 package glob
 
 import (
