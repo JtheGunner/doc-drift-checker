@@ -3,10 +3,27 @@
 // Defaults (applied when the file is missing, empty, or omits a key):
 //
 //	docs:             ["README.md"]
-//	ignore:           []
+//	ignore:           see "Default ignore globs" below
 //	mappings:         {}
 //	mode.default:     "diff"
 //	severity.fail-on: "low"
+//
+// # Default ignore globs
+//
+// Changes that only touch ignored paths never cause drift. The defaults cover
+// four groups (see DefaultIgnore for the exact list):
+//
+//	tests:      **/*_test.go  **/*.test.*  **/*.spec.*  **/test/**  **/tests/**
+//	            **/__tests__/**  **/testdata/**
+//	generated:  **/*.pb.go  **/*_gen.go  **/*.generated.*  **/generated/**  **/*.min.js
+//	lockfiles:  **/go.sum  **/package-lock.json  **/yarn.lock  **/pnpm-lock.yaml
+//	            **/composer.lock  **/Cargo.lock  **/Gemfile.lock  **/poetry.lock
+//	            **/uv.lock
+//	vendored:   **/vendor/**  **/node_modules/**  **/third_party/**
+//
+// A "**/" prefix also matches at the repository root. When the ignore key is
+// present in the file it replaces the defaults entirely: "ignore: []" disables
+// path ignoring, and a custom list must repeat any default it still wants.
 package config
 
 import (
@@ -62,7 +79,8 @@ type Severity struct {
 type Config struct {
 	// Docs are globs of documentation files to check.
 	Docs []string `yaml:"docs"`
-	// Ignore are globs of paths excluded from checking.
+	// Ignore are globs of paths whose changes never cause drift. Defaults to
+	// DefaultIgnore; a key present in the file replaces the defaults.
 	Ignore []string `yaml:"ignore"`
 	// Mappings maps a heading or anchor (e.g. "Installation", "#usage")
 	// to the code globs that the section describes.
@@ -75,10 +93,27 @@ type Config struct {
 func Defaults() Config {
 	return Config{
 		Docs:     []string{"README.md"},
-		Ignore:   nil,
+		Ignore:   DefaultIgnore(),
 		Mappings: nil,
 		Mode:     Mode{Default: ModeDiff},
 		Severity: Severity{FailOn: SeverityLow},
+	}
+}
+
+// DefaultIgnore returns a fresh copy of the built-in ignore globs: test files,
+// generated code, lockfiles and vendored code. A configured ignore key replaces it.
+func DefaultIgnore() []string {
+	return []string{
+		// tests
+		"**/*_test.go", "**/*.test.*", "**/*.spec.*",
+		"**/test/**", "**/tests/**", "**/__tests__/**", "**/testdata/**",
+		// generated code
+		"**/*.pb.go", "**/*_gen.go", "**/*.generated.*", "**/generated/**", "**/*.min.js",
+		// lockfiles
+		"**/go.sum", "**/package-lock.json", "**/yarn.lock", "**/pnpm-lock.yaml",
+		"**/composer.lock", "**/Cargo.lock", "**/Gemfile.lock", "**/poetry.lock", "**/uv.lock",
+		// vendored code
+		"**/vendor/**", "**/node_modules/**", "**/third_party/**",
 	}
 }
 
