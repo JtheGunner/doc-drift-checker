@@ -1,6 +1,10 @@
 package links
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestMatchGlob(t *testing.T) {
 	tests := []struct {
@@ -37,5 +41,36 @@ func TestMatchGlob(t *testing.T) {
 		if got := matchGlob(tt.glob, tt.name); got != tt.want {
 			t.Errorf("matchGlob(%q, %q) = %v, want %v", tt.glob, tt.name, got, tt.want)
 		}
+	}
+}
+
+func TestMatchGlobConsecutiveDoubleStars(t *testing.T) {
+	if !matchGlob("a/**/**/b", "a/b") || !matchGlob("a/**/**/b", "a/x/y/b") || matchGlob("a/**/**/b", "a/x/y/c") {
+		t.Error("consecutive ** must behave like a single **")
+	}
+	if matchGlob("a/**/**", "a") || !matchGlob("a/**/**", "a/x") {
+		t.Error("trailing ** run still requires at least one segment")
+	}
+}
+
+func TestMatchGlobDoesNotBacktrackExponentially(t *testing.T) {
+	pattern := strings.Repeat("**/", 20) + "needle.go"
+	name := strings.Repeat("d/", 30) + "other.go"
+	alternating := strings.Repeat("**/x/", 20) + "needle.go"
+
+	done := make(chan [2]bool, 1)
+	go func() {
+		done <- [2]bool{matchGlob(pattern, name), matchGlob(alternating, strings.Repeat("x/", 40)+"other.go")}
+	}()
+	select {
+	case got := <-done:
+		if got[0] || got[1] {
+			t.Errorf("non-matching patterns matched: %v", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("matchGlob did not finish within 2s: exponential backtracking")
+	}
+	if !matchGlob(pattern, strings.Repeat("d/", 30)+"needle.go") {
+		t.Error("expected a match for the deep path ending in needle.go")
 	}
 }

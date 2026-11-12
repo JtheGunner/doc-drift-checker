@@ -177,3 +177,30 @@ func TestLoad(t *testing.T) {
 		}
 	})
 }
+
+func TestLoadRejectsSymlink(t *testing.T) {
+	outside := filepath.Join(t.TempDir(), "outside.yaml")
+	if err := os.WriteFile(outside, []byte("ignore: [tmp/**]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	inside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(inside, "real.yaml"), []byte("ignore: [tmp/**]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, target := range map[string]string{"outside": outside, "inside": filepath.Join(inside, "real.yaml")} {
+		t.Run(name, func(t *testing.T) {
+			dir := inside
+			if name == "outside" {
+				dir = t.TempDir()
+			}
+			link := filepath.Join(dir, FileName)
+			if err := os.Symlink(target, link); err != nil {
+				t.Skipf("symlinks unsupported: %v", err)
+			}
+			_, err := Load(dir)
+			if err == nil || !strings.Contains(err.Error(), link) || !strings.Contains(err.Error(), "regular file") {
+				t.Errorf("error %v should name %q and mention a regular file", err, link)
+			}
+		})
+	}
+}

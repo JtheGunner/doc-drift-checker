@@ -9,6 +9,7 @@ import (
 
 	"github.com/JtheGunner/doc-drift-checker/internal/config"
 	"github.com/JtheGunner/doc-drift-checker/internal/docparse"
+	"github.com/JtheGunner/doc-drift-checker/internal/fsx"
 	"github.com/JtheGunner/doc-drift-checker/internal/gitx"
 	"github.com/JtheGunner/doc-drift-checker/internal/links"
 )
@@ -60,7 +61,7 @@ func buildLinksReport() (links.Report, error) {
 
 	report := links.Report{Docs: []links.DocLinks{}}
 	for _, doc := range links.MatchDocs(cfg.Docs, tracked) {
-		src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(doc)))
+		src, err := fsx.ReadRegularFile(filepath.Join(root, filepath.FromSlash(doc)))
 		if err != nil {
 			return links.Report{}, fmt.Errorf("read %s: %w", doc, err)
 		}
