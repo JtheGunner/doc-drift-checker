@@ -127,6 +127,25 @@ func TestGoAnalyzerAPIChanged(t *testing.T) {
 		{"blank param names", "package p\nfunc F(_, _ int) {}\n", "package p\nfunc F(a, b int) {}\n", false},
 		{"blank param removed", "package p\nfunc F(_, _ int) {}\n", "package p\nfunc F(_ int) {}\n", true},
 		{"grouped result renamed", "package p\nfunc F() (a, b int) { return }\n", "package p\nfunc F() (x, y int) { return }\n", false},
+		{"unexported embed added", "package p\ntype inner struct{ X int }\ntype T struct{ A int }\n", "package p\ntype inner struct{ X int }\ntype T struct {\n\tA int\n\tinner\n}\n", true},
+		{"unexported embed removed", "package p\ntype inner struct{ X int }\ntype T struct {\n\tA int\n\tinner\n}\n", "package p\ntype inner struct{ X int }\ntype T struct{ A int }\n", true},
+		{"unexported embed became pointer", "package p\ntype inner struct{}\ntype T struct{ inner }\n", "package p\ntype inner struct{}\ntype T struct{ *inner }\n", true},
+		{"unexported generic embed changed", "package p\ntype inner[T any] struct{}\ntype S struct{ inner[int] }\n", "package p\ntype inner[T any] struct{}\ntype S struct{ inner[string] }\n", true},
+		{"exported embed unchanged", "package p\ntype T struct{ fmt.Stringer }\n", "package p\ntype T struct {\n\tfmt.Stringer\n}\n", false},
+		{"unexported embed untouched, its body changed", "package p\ntype inner struct{ X int }\ntype T struct{ inner }\n", "package p\ntype inner struct{ X string }\ntype T struct{ inner }\n", false},
+		{"unexported embed untouched, other declarations changed", "package p\ntype inner struct{}\ntype T struct{ inner }\n", "package p\ntype inner struct{}\nfunc helper() {}\ntype T struct{ inner }\n", false},
+
+		// Known limit, pinned on purpose: there is no type-checking, so exported
+		// declarations that refer to unexported package-level identifiers are
+		// compared textually; a change of the referenced declaration is not seen.
+		{"const refers to changed unexported const", "package p\nconst max = 1\nconst Max = max\n", "package p\nconst max = 2\nconst Max = max\n", false},
+		{"defined type refers to changed unexported type", "package p\ntype bar struct{ X int }\ntype Foo bar\n", "package p\ntype bar struct{ X string }\ntype Foo bar\n", false},
+		{"var refers to changed unexported func", "package p\nfunc mk() int { return 1 }\nvar V = mk()\n", "package p\nfunc mk() string { return \"\" }\nvar V = mk()\n", false},
+
+		// Conservative false positive, pinned: an unexported spec inside a const
+		// group shifts the group index of later exported consts.
+		{"unexported const added inside group", "package p\nconst (\n\tA = iota\n\tB\n)\n", "package p\nconst (\n\ta = iota\n\tA\n\tB\n)\n", true},
+		{"unexported const removed inside group", "package p\nconst (\n\ta = iota\n\tA\n)\n", "package p\nconst (\n\tA = iota\n)\n", true},
 		{"alias to defined type", "package p\ntype U = int\n", "package p\ntype U int\n", true},
 		{"defined type to alias", "package p\ntype U int\n", "package p\ntype U = int\n", true},
 		{"generic alias to defined type", "package p\ntype U[T any] = []T\n", "package p\ntype U[T any] []T\n", true},

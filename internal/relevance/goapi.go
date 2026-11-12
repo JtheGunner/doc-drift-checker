@@ -15,8 +15,8 @@ import (
 // reports a change when the two differ.
 //
 // API surface: exported functions; exported methods whose receiver base type is
-// exported; exported type declarations (structs keep only exported fields and
-// embedded exported types, with their tags; interfaces keep exported methods
+// exported; exported type declarations (structs keep exported fields, with their
+// tags, and all embedded fields; interfaces keep exported methods
 // and embedded types); exported constants (type and value) and variables (type;
 // the value only when no type is declared). Parameter and receiver names, bodies,
 // comments, imports, unexported declarations, formatting and declaration order
@@ -26,6 +26,14 @@ import (
 // sources with nested groups, so before any expansion the analyzer bounds the
 // expanded size of each symbol (maxSymbolNodes) and of the whole file
 // (maxFileNodes); a source above either limit counts as changed (fail closed).
+//
+// Known limits: there is no type-checking. Exported consts, vars and types that
+// refer to unexported package-level identifiers are compared textually, so a
+// change of the referenced declaration (for example "const Max = max" with max
+// changing, "type Foo bar" with bar changing, or the body of an unexported
+// embedded type) is not seen; only the embed line itself counts. Adding or
+// removing an unexported spec inside a const group shifts the group index of
+// later exported consts and is reported as changed (conservative).
 type goAnalyzer struct{}
 
 // Size limits, in AST nodes after expansion of grouped names. Real code stays
@@ -272,24 +280,23 @@ func pruneUnexported(node ast.Node) {
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch t := n.(type) {
 		case *ast.StructType:
-			t.Fields.List = exportedFields(t.Fields.List, false)
+			t.Fields.List = exportedFields(t.Fields.List)
 		case *ast.InterfaceType:
-			t.Methods.List = exportedFields(t.Methods.List, true)
+			t.Methods.List = exportedFields(t.Methods.List)
 		}
 		return true
 	})
 }
 
-// exportedFields keeps the exported fields. Embedded fields (no names) are kept
-// when their type name is exported; interface embeds are always kept because
-// they can contribute exported methods.
-func exportedFields(list []*ast.Field, keepAllEmbedded bool) []*ast.Field {
+// exportedFields keeps the exported named fields and every embedded field.
+// Embedded fields are kept even when their type is unexported: the exported
+// fields and methods promoted through them are part of the public API, so
+// adding, removing or retyping the embed itself is an API change.
+func exportedFields(list []*ast.Field) []*ast.Field {
 	var kept []*ast.Field
 	for _, f := range list {
 		if len(f.Names) == 0 {
-			if keepAllEmbedded || ast.IsExported(embeddedName(f.Type)) {
-				kept = append(kept, f)
-			}
+			kept = append(kept, f)
 			continue
 		}
 		// One field per name, so "X, Y int" equals two separate fields.
@@ -300,23 +307,6 @@ func exportedFields(list []*ast.Field, keepAllEmbedded bool) []*ast.Field {
 		}
 	}
 	return kept
-}
-
-func embeddedName(expr ast.Expr) string {
-	switch e := expr.(type) {
-	case *ast.StarExpr:
-		return embeddedName(e.X)
-	case *ast.SelectorExpr:
-		return e.Sel.Name
-	case *ast.IndexExpr:
-		return embeddedName(e.X)
-	case *ast.IndexListExpr:
-		return embeddedName(e.X)
-	case *ast.Ident:
-		return e.Name
-	default:
-		return ""
-	}
 }
 
 var tokenPosType = reflect.TypeOf(token.NoPos)
