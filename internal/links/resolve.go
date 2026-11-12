@@ -28,6 +28,7 @@ import (
 
 	"github.com/JtheGunner/doc-drift-checker/internal/config"
 	"github.com/JtheGunner/doc-drift-checker/internal/docparse"
+	pathglob "github.com/JtheGunner/doc-drift-checker/internal/glob"
 )
 
 // Origin tells where a link came from.
@@ -127,7 +128,7 @@ func resolveSection(docPath string, full, own docparse.Section, cfg config.Confi
 			explicit = true
 			matched := false
 			for _, file := range tracked {
-				if matchGlob(glob, file) {
+				if pathglob.Match(glob, file) {
 					matched = true
 					setOrigin(byFile, file, origin)
 				}

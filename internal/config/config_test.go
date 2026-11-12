@@ -142,6 +142,52 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
+func TestDefaultIgnore(t *testing.T) {
+	d := Defaults()
+	if len(d.Ignore) == 0 {
+		t.Fatal("Ignore default must not be empty")
+	}
+	for _, want := range []string{"**/*_test.go", "**/*.pb.go", "**/go.sum", "**/vendor/**"} {
+		found := false
+		for _, glob := range d.Ignore {
+			found = found || glob == want
+		}
+		if !found {
+			t.Errorf("default ignore list lacks %q", want)
+		}
+	}
+	if err := validateGlobs("ignore", d.Ignore); err != nil {
+		t.Errorf("default ignore globs must be valid: %v", err)
+	}
+	d.Ignore[0] = "mutated"
+	if Defaults().Ignore[0] == "mutated" {
+		t.Error("Defaults must return a fresh slice")
+	}
+}
+
+func TestIgnoreOverride(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{"absent key keeps defaults", "docs: [README.md]\n", DefaultIgnore()},
+		{"explicit list replaces defaults", "ignore: [\"docs/**\"]\n", []string{"docs/**"}},
+		{"explicit empty list disables ignoring", "ignore: []\n", []string{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Parse([]byte(tt.input), ".docdrift.yaml")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Ignore) != len(tt.want) || (len(tt.want) > 0 && !reflect.DeepEqual(got.Ignore, tt.want)) {
+				t.Errorf("Ignore = %v, want %v", got.Ignore, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoad(t *testing.T) {
 	t.Run("missing file yields defaults", func(t *testing.T) {
 		got, err := Load(t.TempDir())

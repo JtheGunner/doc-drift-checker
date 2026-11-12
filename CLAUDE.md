@@ -17,7 +17,7 @@ Go CLI that reports when code changed but the README passage describing it did n
 
 ## Layout
 
-`cmd/doc-drift-checker` (thin entry point), `internal/cli` (cobra commands, testable via `NewRootCmd`), `internal/{config,docparse,fsx,gitx,links,detect,relevance,report,testutil}`. Create a package only when a ticket needs it. Keep each package single-purpose; `docparse` and reference extraction stay pure (no filesystem or git access).
+`cmd/doc-drift-checker` (thin entry point), `internal/cli` (cobra commands, testable via `NewRootCmd`), `internal/{config,docparse,fsx,gitx,glob,links,detect,relevance,report,testutil}`. Create a package only when a ticket needs it. Keep each package single-purpose; `docparse` and reference extraction stay pure (no filesystem or git access).
 
 ## Testing
 
@@ -37,6 +37,8 @@ Untrusted repo content: read files only via `fsx.ReadRegularFile(root, rel)` (os
 
 `.docdrift.yaml` in the repo root is loaded by `internal/config` (`Load`, `Parse`, `Defaults`). Keys: `docs`, `ignore`, `mappings`, `mode.default` (`diff` default, or `history`), `severity.fail-on` (`low` default, or `high`). Unknown keys and invalid globs are errors; defaults are documented in the package comment.
 
+`ignore` defaults to `config.DefaultIgnore()` (tests, generated code, lockfiles, vendored code). A present `ignore` key replaces the defaults entirely; `ignore: []` disables path ignoring.
+
 ## Section-to-code links
 
 `internal/links` maps README sections to tracked files (pure `Resolve`; the `links [--json]` command in `internal/cli` gathers the inputs). Annotate a section with `<!-- drift: glob, glob -->` (comma-separated, `**` supported, matched against tracked files only).
@@ -48,3 +50,7 @@ Origins: `annotation`, `config` (`mappings`), `implicit` (file-path and relative
 `check --base <ref> [--format text|json] [--warn-only]` compares `base...HEAD`. `internal/detect` is the pure core (a linked file changed and no line of the section's own range changed); `internal/cli/check.go` gathers git data. Files removed or renamed away are added to the file list used for link resolution, so sections mapped to them still trigger. Shared input gathering lives in `internal/cli/inputs.go`.
 
 Exit codes: 0 no drift, 1 drift, 2 usage/runtime error (`cli.ExitCode`, handled in `cmd/doc-drift-checker/main.go`; tests assert the code, never `os.Exit`). `--warn-only` forces 0 on drift only. The JSON schema (`schemaVersion` 1) is documented in the `internal/report` package comment; update it there when the output changes.
+
+## Relevance filters
+
+`internal/relevance` (pure) drops changes before `detect.Detect`: a change is irrelevant when all its paths (new and, for renames/copies, old) match an `ignore` glob, or it is a modification (status M) whose diff is whitespace-only (`gitx.WhitespaceOnly`: `git diff -w --ignore-blank-lines`). Additions, deletions, renames and copies are never dropped as whitespace-only. Documentation edits are never filtered. `check` applies the filter in `internal/cli/check.go`; `links` output is unaffected. Glob matching lives in `internal/glob` (`Match`, `**` supported) and is shared with `internal/links`.

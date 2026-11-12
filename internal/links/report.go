@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"sort"
+
+	pathglob "github.com/JtheGunner/doc-drift-checker/internal/glob"
 )
 
 // Report is the resolved mapping of all documentation files. It is the
@@ -39,7 +41,7 @@ func MatchDocs(globs, tracked []string) []string {
 	docs := []string{}
 	for _, file := range tracked {
 		for _, glob := range globs {
-			if matchGlob(glob, file) {
+			if pathglob.Match(glob, file) {
 				docs = append(docs, file)
 				break
 			}

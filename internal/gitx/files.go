@@ -9,7 +9,13 @@ import (
 // slash-separated paths relative to the repository root, sorted.
 // It runs from the Client directory but always lists the whole repository.
 func (c *Client) TrackedFiles() ([]string, error) {
-	out, err := c.run("ls-files", "-z", "--full-name", ":/")
+	// Listing from the root avoids the ":/" magic pathspec, which
+	// GIT_LITERAL_PATHSPECS would turn into a file name.
+	root, err := c.Root()
+	if err != nil {
+		return nil, err
+	}
+	out, err := c.run("-C", root, "ls-files", "-z")
 	if err != nil {
 		return nil, err
 	}
