@@ -257,7 +257,7 @@ func clearPositions(v reflect.Value) {
 		for i := 0; i < v.NumField(); i++ {
 			field := v.Field(i)
 			if field.Type() == tokenPosType && field.CanSet() {
-				field.SetInt(0)
+				field.SetInt(canonicalPos(v.Type().Field(i).Name, token.Pos(field.Int())))
 				continue
 			}
 			if field.CanSet() {
@@ -265,6 +265,18 @@ func clearPositions(v reflect.Value) {
 			}
 		}
 	}
+}
+
+// canonicalPos returns the position to store in place of pos. Positions are
+// cleared, except for the fields whose mere validity changes the printed text
+// (go/printer checks IsValid on them): TypeSpec.Assign prints "=" for an alias
+// and CallExpr.Ellipsis prints "..." for a spread argument. Those keep a fixed
+// valid position so the syntax survives while the source layout does not.
+func canonicalPos(fieldName string, pos token.Pos) int64 {
+	if (fieldName == "Assign" || fieldName == "Ellipsis") && pos.IsValid() {
+		return 1
+	}
+	return 0
 }
 
 func printNode(node ast.Node) string {
