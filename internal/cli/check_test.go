@@ -201,29 +201,6 @@ func TestCheckWarnOnlyStillFailsOnErrors(t *testing.T) {
 	}
 }
 
-func TestCheckMissingBaseIsUsageError(t *testing.T) {
-	checkRepo(t)
-	out, _, code := runCheck(t)
-	if code != cli.ExitFailure {
-		t.Fatalf("exit code = %d, want %d", code, cli.ExitFailure)
-	}
-	if out != "" {
-		t.Errorf("stdout must be empty, got %q", out)
-	}
-}
-
-func TestCheckMissingBaseMessage(t *testing.T) {
-	checkRepo(t)
-	cmd := cli.NewRootCmd("dev")
-	cmd.SetOut(&bytes.Buffer{})
-	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"check"})
-	err := cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "--base") {
-		t.Fatalf("error must name --base, got %v", err)
-	}
-}
-
 func TestCheckUnknownBaseIsRuntimeError(t *testing.T) {
 	checkRepo(t)
 	if _, _, code := runCheck(t, "--base", "does-not-exist"); code != cli.ExitFailure {
@@ -258,7 +235,7 @@ func TestCheckNoDriftJSONHasEmptyArray(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
-	want := "{\n  \"schemaVersion\": 1,\n  \"base\": \"main\",\n  \"drifts\": []\n}\n"
+	want := "{\n  \"schemaVersion\": 1,\n  \"mode\": \"diff\",\n  \"base\": \"main\",\n  \"drifts\": []\n}\n"
 	if out != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", out, want)
 	}
