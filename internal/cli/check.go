@@ -31,7 +31,11 @@ func newCheckCmd() *cobra.Command {
 		Long: "Report documentation sections whose linked code changed while the section's " +
 			"own text stayed unchanged. Two modes share reporters and exit codes.\n\n" +
 			"Diff mode (--base <ref>): compare base...HEAD and report sections whose linked " +
-			"code changed while the section's own lines did not.\n\n" +
+			"code changed while the section's own lines did not. Go files only count when their " +
+			"exported API changed (declarations, signatures, struct fields, constants, variables); " +
+			"bodies, comments, imports and unexported code are ignored, and a file that does not " +
+			"parse counts as changed. Renames are never dropped, and other languages fall back to " +
+			"path-based relevance. This symbol check applies to diff mode only.\n\n" +
 			"History mode (no --base): needs no base branch, which suits local checks. A section " +
 			"drifts when the newest commit of a linked code file is strictly newer than the " +
 			"newest commit blamed for the section's own lines (git blame, child sections " +
@@ -140,7 +144,7 @@ func runDiffCheck(base string) ([]detect.Drift, error) {
 		}
 		docChanges[doc.Doc] = lineRanges(hunks)
 	}
-	relevant, err := relevantChanges(in.git, base, relevance.NewFilter(in.cfg.Ignore), changes)
+	relevant, err := relevantChanges(in.git, base, relevance.NewFilter(in.cfg.Ignore), relevance.NewAnalyzerSet(relevance.DefaultAnalyzers()...), changes)
 	if err != nil {
 		return nil, err
 	}
@@ -148,11 +152,18 @@ func runDiffCheck(base string) ([]detect.Drift, error) {
 }
 
 // relevantChanges drops the changes that cannot make documentation stale:
-// ignored paths and whitespace-only modifications. Documentation edits are not
-// filtered here; they are read from the unfiltered change list.
-func relevantChanges(git *gitx.Client, base string, filter relevance.Filter, changes []gitx.Change) ([]gitx.Change, error) {
+// ignored paths, whitespace-only modifications and, for languages with a
+// SymbolAnalyzer, changes that leave the public interface untouched. Other
+// languages keep every change that survives the path rules (path-based
+// fallback). Documentation edits are not filtered here; they are read from the
+// unfiltered change list.
+func relevantChanges(git *gitx.Client, base string, filter relevance.Filter, analyzers relevance.AnalyzerSet, changes []gitx.Change) ([]gitx.Change, error) {
 	relevant := make([]gitx.Change, 0, len(changes))
+	mergeBase := ""
 	for _, c := range changes {
+		if filter.PathIgnored(c) {
+			continue
+		}
 		whitespaceOnly := false
 		if filter.NeedsContentCheck(c) {
 			var err error
@@ -160,11 +171,55 @@ func relevantChanges(git *gitx.Client, base string, filter relevance.Filter, cha
 				return nil, err
 			}
 		}
-		if filter.Relevant(c, whitespaceOnly) {
-			relevant = append(relevant, c)
+		if !filter.Relevant(c, whitespaceOnly) {
+			continue
 		}
+		if analyzers.Supports(c) {
+			if mergeBase == "" {
+				var err error
+				if mergeBase, err = git.MergeBase(base); err != nil {
+					return nil, err
+				}
+			}
+			changed, err := apiChanged(git, mergeBase, analyzers, c)
+			if err != nil {
+				return nil, err
+			}
+			if !changed {
+				continue
+			}
+		}
+		relevant = append(relevant, c)
 	}
 	return relevant, nil
+}
+
+// apiChanged reads both versions of a file and asks the analyzer whether its
+// public interface changed. The side that does not exist (added or deleted file)
+// is passed as nil.
+func apiChanged(git *gitx.Client, mergeBase string, analyzers relevance.AnalyzerSet, c gitx.Change) (bool, error) {
+	var oldSrc, newSrc []byte
+	var err error
+	if c.Status != gitx.StatusAdded {
+		if oldSrc, err = readOptional(git, mergeBase, c.Path); err != nil {
+			return false, err
+		}
+	}
+	if c.Status != gitx.StatusDeleted {
+		if newSrc, err = readOptional(git, "HEAD", c.Path); err != nil {
+			return false, err
+		}
+	}
+	return analyzers.APIChanged(c, oldSrc, newSrc)
+}
+
+// readOptional reads a file at a revision; a missing file yields nil content.
+func readOptional(git *gitx.Client, rev, path string) ([]byte, error) {
+	src, err := git.FileAt(rev, path)
+	if errors.Is(err, gitx.ErrNotExist) {
+		return nil, nil
+	}
+	return src, err
 }
 
 // withRemovedPaths returns tracked plus the paths that existed at the base but not at HEAD.
