@@ -17,7 +17,7 @@ Go CLI that reports when code changed but the README passage describing it did n
 
 ## Layout
 
-`cmd/doc-drift-checker` (thin entry point), `internal/cli` (cobra commands, testable via `NewRootCmd`), `internal/{config,docparse,fsx,gitx,glob,links,detect,relevance,report,testutil}`. Create a package only when a ticket needs it. Keep each package single-purpose; `docparse` and reference extraction stay pure (no filesystem or git access).
+`cmd/doc-drift-checker` (thin entry point), `internal/cli` (cobra commands, testable via `NewRootCmd`), `internal/{config,docparse,fsx,gitx,glob,links,lock,detect,relevance,report,testutil}`. Create a package only when a ticket needs it. Keep each package single-purpose; `docparse` and reference extraction stay pure (no filesystem or git access).
 
 ## Testing
 
@@ -56,6 +56,16 @@ Exit codes: 0 no drift, 1 drift, 2 usage/runtime error (`cli.ExitCode`, handled 
 `check` without `--base` runs history mode (`--base` selects diff mode; config `mode.default` is not wired yet). `detect.History` is the pure core; `internal/cli/history.go` gathers dates. A section drifts when a mapped, non-ignored code file's newest commit (`gitx.CommitTimes`, follows renames) is strictly newer than the newest commit blamed for the section's own lines (`detect.OwnRange`, child sections excluded) at HEAD. Dates are committer times; equal dates are no drift; sections without blame data or mapped files are not reported. `--ignore-revs-file <path>` (history mode only, usage error with `--base`; git's format, parsed by `gitx.ParseIgnoreRevs`, read without `fsx` since it may live outside the repo) is passed to `git blame` and filters the file log. The JSON report has an additive `mode` field (`diff`/`history`); `base` is empty in history mode.
 
 Documented limits (also in the `check` help and the `internal/detect` package comment): a squash merge stamps every line it touches with the merge time, so code and docs changed in one squash are equal (no drift) and the ordering inside the squashed branch is lost; rewritten history (rebase, amend, filter-branch) changes committer times and can change results; formatting-only commits distort dates (use `--ignore-revs-file`); deleted section lines are invisible to blame; only HEAD is read (no working tree) and deleted files cannot be dated; shallow clones are rejected (`gitx.EnsureFullHistory`).
+
+## Ack and lockfile
+
+`ack <section>` (exactly one argument, exit 0 or 2) confirms that a section is still correct and records it in `doc-drift.lock` in the repo root (committed to git; written atomically via a temp file plus rename, never through a symlink). `internal/lock` is pure (parse, deterministic marshal, `Diff`, `With`); `internal/cli/{ack,lockfile,lockstate}.go` gather hashes via `gitx` and do the I/O. Reading goes through `fsx.ReadRegularFileLimit` (4 MiB cap).
+
+- Section key: `<doc path>#<anchor>` (doc path as in `links`, anchor from `docparse`, unique per doc). `ack` takes the full key, or a bare/`#` anchor when unique across configured docs; exact matching only; unknown or ambiguous is exit 2.
+- Hashed: every mapped file (all link origins, tracked at HEAD, not matching `ignore`, not the lockfile itself) as `sha256:<hex>` of its content at HEAD. `ack` exits 2 for a mapped file with uncommitted changes (`gitx.DirtyFiles`), a file above 4 MiB or unreadable, or a section without hashable files. Re-ack replaces only that section's entry.
+- Format: JSON, `version` 1, `sections` -> key -> `files` -> path -> hash; sorted keys, 2-space indent, LF, one trailing newline, no timestamps. The lockfile is untrusted: `lock.Parse` rejects unknown fields, duplicate keys, trailing data, wrong version, empty entries, unsafe paths (absolute, `..`, backslash, unclean, control characters) and bad hashes; lock paths are only compared, never opened. A malformed or symlinked lockfile is exit 2 from `check` and `ack`; a missing one means no entries.
+- Effect on `check` (`detect.ApplyLock`, verdicts from `cli.lockVerdicts`): a section's locked state matches iff the current hashable mapped files equal the locked ones (same paths, same hashes; added, removed, renamed-away or unhashable files mismatch). Ignored paths are excluded on both sides. Diff mode: a drift is suppressed iff the state matches. History mode: an entry takes precedence over blame dating, the section drifts iff the state does not match (triggering files = differing paths), so re-run `ack` after updating the docs. Suppressed sections are not reported; no output field was added. Entries for sections that no longer exist are ignored (no pruning).
+- Known limits: only path ignore rules apply to the comparison (whitespace and symbol relevance cannot be evaluated against stored hashes), so any content change of a non-ignored mapped file reopens the section; a rename of a mapped file mismatches; an oversized mapped file always mismatches. Out of scope: updating the lockfile in CI.
 
 ## Severity and broken references
 
