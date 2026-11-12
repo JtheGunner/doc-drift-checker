@@ -3,11 +3,13 @@ package relevance
 import (
 	"bytes"
 	"go/ast"
+	"go/build/constraint"
 	"go/parser"
 	"go/printer"
 	"go/token"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
 // goAnalyzer detects changes of the exported API of Go source files using
@@ -20,7 +22,11 @@ import (
 // and embedded types); exported constants (type and value) and variables (type;
 // the value only when no type is declared). Parameter and receiver names, bodies,
 // comments, imports, unexported declarations, formatting and declaration order
-// never count. A side that does not parse counts as changed.
+// never count. The package name and the build constraint lines (//go:build and
+// legacy // +build before the package clause, normalized) are compared too,
+// since they decide which package exports the API; no other comment is read.
+// A side that does not parse counts as changed. An added or deleted file is
+// changed iff the present side has exported API.
 //
 // Expanding grouped names ("a, b int" is two parameters) can blow up on hostile
 // sources with nested groups, so before any expansion the analyzer bounds the
@@ -33,7 +39,11 @@ import (
 // changing, "type Foo bar" with bar changing, or the body of an unexported
 // embedded type) is not seen; only the embed line itself counts. Adding or
 // removing an unexported spec inside a const group shifts the group index of
-// later exported consts and is reported as changed (conservative).
+// later exported consts and is reported as changed (conservative). An unexported
+// method added to or removed from an exported interface breaks external
+// implementers but is not compared (only the exported API is). Other directives
+// (//go:generate, //go:linkname, //go:embed) do not change the declared
+// exported symbols or types and are ignored with all other comments.
 type goAnalyzer struct{}
 
 // Size limits, in AST nodes after expansion of grouped names. Real code stays
@@ -51,29 +61,48 @@ func (goAnalyzer) APIChanged(oldSrc, newSrc []byte) (bool, error) {
 	if !oldOK || !newOK {
 		return true, nil
 	}
-	if len(oldAPI) != len(newAPI) {
+	// An added or deleted file is changed iff the present side has exported API;
+	// its package name and build constraints alone are not API.
+	if len(oldSrc) == 0 {
+		return len(newAPI.symbols) > 0, nil
+	}
+	if len(newSrc) == 0 {
+		return len(oldAPI.symbols) > 0, nil
+	}
+	if oldAPI.header != newAPI.header || len(oldAPI.symbols) != len(newAPI.symbols) {
 		return true, nil
 	}
-	for key, text := range oldAPI {
-		if other, ok := newAPI[key]; !ok || other != text {
+	for key, text := range oldAPI.symbols {
+		if other, ok := newAPI.symbols[key]; !ok || other != text {
 			return true, nil
 		}
 	}
 	return false, nil
 }
 
-// goExportedAPI maps a symbol key to the canonical text of its declaration. An
-// empty source is an absent file with an empty API; ok is false on parse errors.
-func goExportedAPI(src []byte) (api map[string]string, ok bool) {
-	api = map[string]string{}
+// goSurface is the canonical comparable form of one source file.
+type goSurface struct {
+	// header holds the package name and the build constraint lines.
+	header string
+	// symbols maps a symbol key to the canonical text of its declaration.
+	symbols map[string]string
+}
+
+// goExportedAPI builds the surface of one file. An empty source is an absent
+// file with an empty surface; ok is false on parse errors and when the file
+// exceeds the size limits.
+func goExportedAPI(src []byte) (surface goSurface, ok bool) {
+	api := map[string]string{}
+	surface.symbols = api
 	if len(src) == 0 {
-		return api, true
+		return surface, true
 	}
-	// Comments are not parsed, so they can never influence the result.
+	// Declarations are parsed without comments, so comments can never influence them.
 	file, err := parser.ParseFile(token.NewFileSet(), "", src, parser.SkipObjectResolution)
 	if err != nil {
-		return nil, false
+		return goSurface{}, false
 	}
+	surface.header = goFileHeader(src, file.Name.Name)
 	budget := &nodeBudget{}
 	for _, decl := range file.Decls {
 		within := true
@@ -84,10 +113,55 @@ func goExportedAPI(src []byte) (api map[string]string, ok bool) {
 			within = addGoGenDecl(api, budget, d)
 		}
 		if !within {
-			return nil, false
+			return goSurface{}, false
 		}
 	}
-	return api, true
+	return surface, true
+}
+
+// goFileHeader returns the package name plus the normalized build constraint
+// lines (//go:build and legacy // +build) found before the package clause. The
+// source is parsed again up to the package clause only, with comments, so no
+// other comment is ever looked at.
+func goFileHeader(src []byte, packageName string) string {
+	var b strings.Builder
+	b.WriteString("package " + packageName)
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "", src, parser.ParseComments|parser.PackageClauseOnly)
+	if err != nil {
+		return b.String()
+	}
+	for _, group := range file.Comments {
+		if group.End() > file.Package {
+			break
+		}
+		for _, c := range group.List {
+			if line, ok := buildConstraintLine(c.Text); ok {
+				b.WriteString("\n" + line)
+			}
+		}
+	}
+	return b.String()
+}
+
+// buildConstraintLine normalizes a build constraint comment; ok is false for
+// every other comment.
+func buildConstraintLine(comment string) (line string, ok bool) {
+	text := strings.TrimSpace(comment)
+	switch {
+	case constraint.IsGoBuild(text):
+		line = "//go:build "
+	case constraint.IsPlusBuild(text):
+		line = "// +build "
+	default:
+		return "", false
+	}
+	expr, err := constraint.Parse(text)
+	if err != nil {
+		// Unparsable constraint: compare the raw text, which is conservative.
+		return text, true
+	}
+	return line + expr.String(), true
 }
 
 func addGoFunc(api map[string]string, budget *nodeBudget, d *ast.FuncDecl) bool {
