@@ -182,15 +182,11 @@ func exportedFields(list []*ast.Field, keepAllEmbedded bool) []*ast.Field {
 			}
 			continue
 		}
-		var names []*ast.Ident
+		// One field per name, so "X, Y int" equals two separate fields.
 		for _, n := range f.Names {
 			if n.IsExported() {
-				names = append(names, n)
+				kept = append(kept, &ast.Field{Names: []*ast.Ident{n}, Type: f.Type, Tag: f.Tag})
 			}
-		}
-		if len(names) > 0 {
-			f.Names = names
-			kept = append(kept, f)
 		}
 	}
 	return kept
@@ -216,7 +212,8 @@ func embeddedName(expr ast.Expr) string {
 var tokenPosType = reflect.TypeOf(token.NoPos)
 
 // canonicalize makes the printed form independent of the source layout: it
-// drops parameter names (they are not part of a signature's identity) and
+// drops parameter names while keeping the parameter count (names are not part of
+// a signature's identity, grouped names like "a, b int" still are two parameters) and
 // clears every position, which the printer would otherwise use to choose
 // between one-line and multi-line output.
 func canonicalize[N ast.Node](node N) N {
@@ -238,9 +235,16 @@ func dropNames(list *ast.FieldList) {
 	if list == nil {
 		return
 	}
+	// A field with N names stands for N parameters: keep the arity by expanding it
+	// into N unnamed fields that share the type.
+	var expanded []*ast.Field
 	for _, f := range list.List {
-		f.Names = nil
+		count := max(len(f.Names), 1)
+		for range count {
+			expanded = append(expanded, &ast.Field{Type: f.Type})
+		}
 	}
+	list.List = expanded
 }
 
 func clearPositions(v reflect.Value) {
