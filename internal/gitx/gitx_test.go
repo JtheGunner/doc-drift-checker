@@ -3,6 +3,7 @@ package gitx_test
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -296,5 +297,43 @@ func TestLogUnknownPathIsEmpty(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("expected empty log, got %+v", got)
+	}
+}
+
+func TestTrackedFiles(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Write("b.txt", "b\n")
+	r.Write("dir/sp ace.txt", "s\n")
+	r.Write("a.txt", "a\n")
+	r.Commit("base")
+	r.Write("untracked.txt", "u\n")
+
+	got, err := gitx.New(r.Dir).TrackedFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"a.txt", "b.txt", "dir/sp ace.txt"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %q\nwant %q", got, want)
+	}
+}
+
+func TestTrackedFilesNotARepository(t *testing.T) {
+	if _, err := gitx.New(t.TempDir()).TrackedFiles(); err == nil {
+		t.Fatal("expected an error outside a git repository")
+	}
+}
+
+func TestRoot(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.CommitFile("sub/a.txt", "a\n", "base")
+	got, err := gitx.New(r.Dir + "/sub").Root()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantDir, _ := filepath.EvalSymlinks(r.Dir)
+	gotDir, _ := filepath.EvalSymlinks(got)
+	if gotDir != wantDir {
+		t.Fatalf("got %q want %q", gotDir, wantDir)
 	}
 }
