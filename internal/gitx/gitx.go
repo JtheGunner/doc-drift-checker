@@ -45,7 +45,9 @@ func New(dir string) *Client {
 func (c *Client) run(args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = c.dir
-	cmd.Env = append(os.Environ(), "LC_ALL=C", "GIT_TERMINAL_PROMPT=0")
+	// GIT_LITERAL_PATHSPECS makes every path after "--" a literal file name, so a
+	// tracked file named "*.go" or ":(top)x" cannot match other files.
+	cmd.Env = append(os.Environ(), "LC_ALL=C", "GIT_TERMINAL_PROMPT=0", "GIT_LITERAL_PATHSPECS=1")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

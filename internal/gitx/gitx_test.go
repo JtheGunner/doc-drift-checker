@@ -384,3 +384,65 @@ func TestWhitespaceOnlyUnknownBase(t *testing.T) {
 		t.Fatal("expected an error for an unknown base")
 	}
 }
+
+// oddNameRepo tracks a.go plus files whose names look like pathspecs. a.go gets
+// a real change and "*.go" a whitespace-only one, in separate commits.
+func oddNameRepo(t *testing.T) *testutil.Repo {
+	t.Helper()
+	r := testutil.NewRepo(t)
+	r.Write("a.go", "one\ntwo\nthree\n")
+	r.Write("*.go", "one\ntwo\nthree\n")
+	r.Write(":(top)b.txt", "one\ntwo\nthree\n")
+	r.Commit("base")
+	r.Branch("feature")
+	r.CommitFile("a.go", "ONE\ntwo\nthree\n", "real change in a.go")
+	r.CommitFile("*.go", "one\ntwo   \nthree\n", "whitespace change in star file")
+	r.CommitFile(":(top)b.txt", "one\ntwo\nTHREE\n", "real change in top file")
+	return r
+}
+
+func TestPathsAreLiteral(t *testing.T) {
+	r := oddNameRepo(t)
+	client := gitx.New(r.Dir)
+
+	t.Run("WhitespaceOnly", func(t *testing.T) {
+		star, err := client.WhitespaceOnly("main", gitx.Change{Status: gitx.StatusModified, Path: "*.go"})
+		if err != nil || !star {
+			t.Errorf("WhitespaceOnly(*.go) = %v, %v; want true", star, err)
+		}
+		a, err := client.WhitespaceOnly("main", gitx.Change{Status: gitx.StatusModified, Path: "a.go"})
+		if err != nil || a {
+			t.Errorf("WhitespaceOnly(a.go) = %v, %v; want false", a, err)
+		}
+	})
+	t.Run("Hunks", func(t *testing.T) {
+		hunks, err := client.Hunks("main", gitx.Change{Status: gitx.StatusModified, Path: ":(top)b.txt"})
+		want := []gitx.Hunk{{OldStart: 3, OldLines: 1, NewStart: 3, NewLines: 1}}
+		if err != nil || !reflect.DeepEqual(hunks, want) {
+			t.Errorf("Hunks(:(top)b.txt) = %+v, %v; want %+v", hunks, err, want)
+		}
+		hunks, err = client.Hunks("main", gitx.Change{Status: gitx.StatusModified, Path: "*.go"})
+		want = []gitx.Hunk{{OldStart: 2, OldLines: 1, NewStart: 2, NewLines: 1}}
+		if err != nil || !reflect.DeepEqual(hunks, want) {
+			t.Errorf("Hunks(*.go) = %+v, %v; want %+v", hunks, err, want)
+		}
+	})
+	t.Run("Log", func(t *testing.T) {
+		commits, err := client.Log("*.go")
+		if err != nil || len(commits) != 2 {
+			t.Fatalf("Log(*.go) = %+v, %v; want 2 commits", commits, err)
+		}
+		if commits[0].Subject != "whitespace change in star file" || commits[1].Subject != "base" {
+			t.Errorf("unexpected commits: %+v", commits)
+		}
+	})
+	t.Run("Blame", func(t *testing.T) {
+		lines, err := client.Blame("*.go", 1, 3)
+		if err != nil || len(lines) != 3 {
+			t.Fatalf("Blame(*.go) = %+v, %v; want 3 lines", lines, err)
+		}
+		if lines[0].Summary != "base" || lines[1].Summary != "whitespace change in star file" {
+			t.Errorf("unexpected blame: %+v", lines)
+		}
+	})
+}
