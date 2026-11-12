@@ -80,3 +80,17 @@ func TestMergeBaseUnknownRef(t *testing.T) {
 		t.Fatalf("error = %v, want ErrBaseNotFound", err)
 	}
 }
+
+func TestFileSizeAt(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.CommitFile("a.go", "12345", "v1")
+	c := gitx.New(r.Dir)
+
+	size, err := c.FileSizeAt("HEAD", "a.go")
+	if err != nil || size != 5 {
+		t.Fatalf("size = %d, err = %v", size, err)
+	}
+	if _, err := c.FileSizeAt("HEAD", "missing.go"); !errors.Is(err, gitx.ErrNotExist) {
+		t.Fatalf("missing file error = %v, want ErrNotExist", err)
+	}
+}
