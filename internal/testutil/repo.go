@@ -111,6 +111,12 @@ func (r *Repo) Commit(message string) string {
 	return r.Git("rev-parse", "HEAD")
 }
 
+// Tick advances the deterministic clock by one commit without committing, so a
+// following command that records a committer date (cherry-pick, merge) gets a new one.
+func (r *Repo) Tick() {
+	r.commits++
+}
+
 // CommitFile writes one file and commits it.
 func (r *Repo) CommitFile(path, content, message string) string {
 	r.t.Helper()

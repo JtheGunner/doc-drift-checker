@@ -1,6 +1,9 @@
 // Package detect finds documentation sections that drifted: their mapped code
 // changed while the section's own text did not.
 //
+// Two modes share the Drift type. Diff mode (Detect) compares base...HEAD.
+// History mode (History) compares dates: see "History mode" below.
+//
 // Detection is pure. It takes already-gathered data (resolved links, the change
 // list and the changed line ranges per document) and never touches git or the
 // filesystem.
@@ -9,6 +12,29 @@
 // and no line of the section's own range changed. The own range excludes child
 // sections. A pure deletion in the document counts as touching a section when
 // it happens after one of the section's own lines.
+//
+// # History mode
+//
+// History mode needs no base reference. A section drifted when at least one
+// mapped code file's date is strictly newer than the section's date. Both are
+// committer times: the section date is the newest commit blamed for the
+// section's own lines in the document at HEAD (line level, child sections
+// excluded), the file date is the newest commit in the file's history. Commits
+// listed in an ignore-revs file are skipped on both sides.
+//
+// Known limits, which cannot be fixed from commit data alone:
+//   - Squash merges: the squash commit carries the merge time for every line it
+//     touches. Code and documentation changed in one squash get equal dates and
+//     are not reported, and the ordering of the commits inside the squashed
+//     branch is lost.
+//   - Rewritten history (rebase, amend, filter-branch) changes committer times,
+//     so the result can change after a rewrite.
+//   - Formatting-only commits move dates. Exclude them with --ignore-revs-file.
+//   - Lines deleted from a section are invisible to blame: deleting text does
+//     not make the section newer.
+//   - Only HEAD is read; uncommitted changes in the working tree are ignored.
+//     Deleted files cannot be dated and are not considered.
+//   - Blame needs full history: shallow clones are rejected by the caller.
 package detect
 
 import (
@@ -94,18 +120,24 @@ func triggeringFiles(section links.SectionLinks, changes []Change) []string {
 
 type span struct{ start, end int }
 
-// ownRange is the section's range cut before its first child section.
-func ownRange(sections []links.SectionLinks, i int) span {
+// OwnRange returns the first and last line (inclusive) of sections[i]'s own
+// text: its range cut before its first child section.
+func OwnRange(sections []links.SectionLinks, i int) (start, end int) {
 	s := sections[i]
 	for _, next := range sections[i+1:] {
 		if next.StartLine > s.EndLine {
 			break
 		}
 		if next.Level > s.Level {
-			return span{s.StartLine, next.StartLine - 1}
+			return s.StartLine, next.StartLine - 1
 		}
 	}
-	return span{s.StartLine, s.EndLine}
+	return s.StartLine, s.EndLine
+}
+
+func ownRange(sections []links.SectionLinks, i int) span {
+	start, end := OwnRange(sections, i)
+	return span{start, end}
 }
 
 func touched(own span, ranges []LineRange) bool {

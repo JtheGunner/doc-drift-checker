@@ -51,6 +51,12 @@ Origins: `annotation`, `config` (`mappings`), `implicit` (file-path and relative
 
 Exit codes: 0 no drift, 1 drift, 2 usage/runtime error (`cli.ExitCode`, handled in `cmd/doc-drift-checker/main.go`; tests assert the code, never `os.Exit`). `--warn-only` forces 0 on drift only. The JSON schema (`schemaVersion` 1) is documented in the `internal/report` package comment; update it there when the output changes.
 
+## Drift check (history mode)
+
+`check` without `--base` runs history mode (`--base` selects diff mode; config `mode.default` is not wired yet). `detect.History` is the pure core; `internal/cli/history.go` gathers dates. A section drifts when a mapped, non-ignored code file's newest commit (`gitx.CommitTimes`, follows renames) is strictly newer than the newest commit blamed for the section's own lines (`detect.OwnRange`, child sections excluded) at HEAD. Dates are committer times; equal dates are no drift; sections without blame data or mapped files are not reported. `--ignore-revs-file <path>` (history mode only, usage error with `--base`; git's format, parsed by `gitx.ParseIgnoreRevs`, read without `fsx` since it may live outside the repo) is passed to `git blame` and filters the file log. The JSON report has an additive `mode` field (`diff`/`history`); `base` is empty in history mode.
+
+Documented limits (also in the `check` help and the `internal/detect` package comment): a squash merge stamps every line it touches with the merge time, so code and docs changed in one squash are equal (no drift) and the ordering inside the squashed branch is lost; rewritten history (rebase, amend, filter-branch) changes committer times and can change results; formatting-only commits distort dates (use `--ignore-revs-file`); deleted section lines are invisible to blame; only HEAD is read (no working tree) and deleted files cannot be dated; shallow clones are rejected (`gitx.EnsureFullHistory`).
+
 ## Relevance filters
 
 `internal/relevance` (pure) drops changes before `detect.Detect`: a change is irrelevant when all its paths (new and, for renames/copies, old) match an `ignore` glob, or it is a modification (status M) whose diff is whitespace-only (`gitx.WhitespaceOnly`: `git diff -w --ignore-blank-lines`). Additions, deletions, renames and copies are never dropped as whitespace-only. Documentation edits are never filtered. `check` applies the filter in `internal/cli/check.go`; `links` output is unaffected. Glob matching lives in `internal/glob` (`Match`, `**` supported) and is shared with `internal/links`.

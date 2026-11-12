@@ -219,9 +219,9 @@ func TestBlame(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []gitx.BlameLine{
-		{Line: 1, Commit: first, Author: "Test Author", Summary: "first"},
-		{Line: 2, Commit: second, Author: "Test Author", Summary: "second"},
-		{Line: 3, Commit: first, Author: "Test Author", Summary: "first"},
+		{Line: 1, Commit: first, Author: "Test Author", Summary: "first", Time: commitTime(1)},
+		{Line: 2, Commit: second, Author: "Test Author", Summary: "second", Time: commitTime(2)},
+		{Line: 3, Commit: first, Author: "Test Author", Summary: "first", Time: commitTime(1)},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v\nwant %+v", got, want)

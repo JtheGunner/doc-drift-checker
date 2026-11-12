@@ -33,13 +33,25 @@ func TestWriteTextEmpty(t *testing.T) {
 	}
 }
 
+func TestWriteJSONHistoryMode(t *testing.T) {
+	var buf bytes.Buffer
+	if err := report.WriteJSON(&buf, report.ModeHistory, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	want := "{\n  \"schemaVersion\": 1,\n  \"mode\": \"history\",\n  \"base\": \"\",\n  \"drifts\": []\n}\n"
+	if buf.String() != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
 func TestWriteJSONGolden(t *testing.T) {
 	var buf bytes.Buffer
-	if err := report.WriteJSON(&buf, "main", sample[:1]); err != nil {
+	if err := report.WriteJSON(&buf, report.ModeDiff, "main", sample[:1]); err != nil {
 		t.Fatal(err)
 	}
 	want := `{
   "schemaVersion": 1,
+  "mode": "diff",
   "base": "main",
   "drifts": [
     {
@@ -62,7 +74,7 @@ func TestWriteJSONGolden(t *testing.T) {
 func TestWriteJSONEmptyListsAreArrays(t *testing.T) {
 	for name, drifts := range map[string][]detect.Drift{"nil": nil, "empty": {}} {
 		var buf bytes.Buffer
-		if err := report.WriteJSON(&buf, "main", drifts); err != nil {
+		if err := report.WriteJSON(&buf, report.ModeDiff, "main", drifts); err != nil {
 			t.Fatal(err)
 		}
 		var raw map[string]json.RawMessage
@@ -74,7 +86,7 @@ func TestWriteJSONEmptyListsAreArrays(t *testing.T) {
 		}
 	}
 	var buf bytes.Buffer
-	if err := report.WriteJSON(&buf, "main", []detect.Drift{{Doc: "a", Section: "s", Line: 1}}); err != nil {
+	if err := report.WriteJSON(&buf, report.ModeDiff, "main", []detect.Drift{{Doc: "a", Section: "s", Line: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Contains(buf.Bytes(), []byte(`"files": []`)) {
