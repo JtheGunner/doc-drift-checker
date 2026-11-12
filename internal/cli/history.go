@@ -10,58 +10,63 @@ import (
 	"github.com/JtheGunner/doc-drift-checker/internal/relevance"
 )
 
-// runHistoryCheck dates every section and its mapped code from the commit
-// history at HEAD and reports sections older than their code. See the detect
-// package comment for the limits of this mode.
-func runHistoryCheck(ignoreRevsFile string) (checkResult, error) {
+// evaluateHistory dates every section and its mapped code from the commit
+// history at HEAD and evaluates every section: a section drifts when it is
+// older than its code. See the detect package comment for the limits of this
+// mode. A non-empty section names the section whose commit subjects are
+// gathered as well (explain).
+func evaluateHistory(ignoreRevsFile, section string) (evalResult, error) {
 	ignoredRevs := map[string]bool{}
 	if ignoreRevsFile != "" {
 		abs, err := filepath.Abs(ignoreRevsFile)
 		if err != nil {
-			return checkResult{}, fmt.Errorf("resolve --ignore-revs-file: %w", err)
+			return evalResult{}, fmt.Errorf("resolve --ignore-revs-file: %w", err)
 		}
 		if ignoredRevs, err = gitx.ParseIgnoreRevs(abs); err != nil {
-			return checkResult{}, err
+			return evalResult{}, err
 		}
 		ignoreRevsFile = abs
 	}
 	in, err := loadRepoInputs()
 	if err != nil {
-		return checkResult{}, err
+		return evalResult{}, err
 	}
 	// Run git from the repository root so every path is root-relative.
 	git := gitx.New(in.root)
 	if err := git.EnsureFullHistory(); err != nil {
-		return checkResult{}, err
+		return evalResult{}, err
 	}
 	locked, err := loadLock(in.root)
 	if err != nil {
-		return checkResult{}, err
+		return evalResult{}, err
 	}
 	headFiles, err := git.HeadFiles()
 	if err != nil {
-		return checkResult{}, err
+		return evalResult{}, err
 	}
 	// Only files committed at HEAD can be dated; staged-only files and deleted
 	// files are left out of both the document list and the link targets.
 	in.tracked = headFiles
 	docs, err := in.resolveDocs(headFiles)
 	if err != nil {
-		return checkResult{}, err
+		return evalResult{}, err
+	}
+	target, err := resolveTarget(docs, section)
+	if err != nil {
+		return evalResult{}, err
 	}
 	dates := historyDates{
 		git:            git,
 		filter:         relevance.NewFilter(in.cfg.Ignore),
 		ignoreRevsFile: ignoreRevsFile,
 		ignoredRevs:    ignoredRevs,
-		files:          map[string]int64{},
-		seen:           map[string]bool{},
+		files:          map[string]detect.HistoryFile{},
 	}
-	sectionDates := map[detect.SectionKey]int64{}
+	sectionDates := map[detect.SectionKey]detect.CommitRef{}
 	for _, doc := range docs {
 		for i, section := range doc.Sections {
 			if err := dates.addFiles(section); err != nil {
-				return checkResult{}, err
+				return evalResult{}, err
 			}
 			if !dates.hasDatedFile(section) {
 				continue
@@ -69,72 +74,102 @@ func runHistoryCheck(ignoreRevsFile string) (checkResult, error) {
 			start, end := detect.OwnRange(doc.Sections, i)
 			date, ok, err := dates.sectionDate(doc.Doc, start, end)
 			if err != nil {
-				return checkResult{}, err
+				return evalResult{}, err
 			}
 			if ok {
 				sectionDates[detect.SectionKey{Doc: doc.Doc, Line: section.StartLine}] = date
 			}
 		}
 	}
-	drifts := detect.History(detect.HistoryInput{Docs: docs, SectionDates: sectionDates, FileDates: dates.files})
+	if target.set {
+		if err := dates.addSubjects(target.section); err != nil {
+			return evalResult{}, err
+		}
+	}
 	// A lockfile entry takes precedence over blame dating for its section.
 	verdicts, err := lockVerdicts(git, dates.filter, docs, locked)
 	if err != nil {
-		return checkResult{}, err
+		return evalResult{}, err
 	}
-	drifts = detect.ApplyLock(docs, drifts, verdicts, true)
-	return checkResult{drifts: drifts, failOn: in.cfg.Severity.FailOn}, nil
+	evals := detect.Evaluate(detect.EvalInput{
+		Mode: detect.ModeHistory, Docs: docs, IgnoreRules: dates.filter.Globs(),
+		SectionDates: sectionDates, HistoryFiles: dates.files, Lock: verdicts,
+	})
+	return evalResult{evals: evals, failOn: in.cfg.Severity.FailOn, target: target.key}, nil
 }
 
-// historyDates gathers commit dates from git. files holds only the dated,
-// non-ignored code files.
+// historyDates gathers commit dates from git. files holds every linked code
+// file: ignored ones with their glob, the others with their newest commit.
 type historyDates struct {
 	git            *gitx.Client
 	filter         relevance.Filter
 	ignoreRevsFile string
 	ignoredRevs    map[string]bool
-	files          map[string]int64
-	seen           map[string]bool
+	files          map[string]detect.HistoryFile
 }
 
-// addFiles dates the section's linked files that are not ignored by path.
+// addFiles dates the section's linked files; a file matching an ignore glob is
+// recorded as ignored and not dated.
 func (d *historyDates) addFiles(section links.SectionLinks) error {
 	for _, l := range section.Links {
-		if d.seen[l.File] || d.filter.Ignored(l.File) {
+		if _, seen := d.files[l.File]; seen {
 			continue
 		}
-		d.seen[l.File] = true
+		if glob, ignored := d.filter.MatchingGlob(l.File); ignored {
+			d.files[l.File] = detect.HistoryFile{IgnoredGlob: glob}
+			continue
+		}
+		file := detect.HistoryFile{}
 		commits, err := d.git.CommitTimes(l.File)
 		if err != nil {
 			return err
 		}
-		if date, ok := gitx.LatestTime(commits, d.ignoredRevs); ok {
-			d.files[l.File] = date
+		if newest, ok := gitx.LatestCommit(commits, d.ignoredRevs); ok {
+			file.Newest = &detect.CommitRef{Hash: newest.Hash, Time: newest.Time}
 		}
+		d.files[l.File] = file
 	}
 	return nil
 }
 
 func (d *historyDates) hasDatedFile(section links.SectionLinks) bool {
 	for _, l := range section.Links {
-		if _, ok := d.files[l.File]; ok {
+		if d.files[l.File].Newest != nil {
 			return true
 		}
 	}
 	return false
 }
 
-// sectionDate is the newest committer time blamed for lines start..end of doc.
-func (d *historyDates) sectionDate(doc string, start, end int) (int64, bool, error) {
+// addSubjects looks up the commit subject of the newest commit of every dated
+// file of the section.
+func (d *historyDates) addSubjects(section links.SectionLinks) error {
+	for _, l := range section.Links {
+		file := d.files[l.File]
+		if file.Newest == nil || file.Newest.Subject != "" {
+			continue
+		}
+		subject, err := d.git.CommitSubject(file.Newest.Hash)
+		if err != nil {
+			return err
+		}
+		file.Newest = &detect.CommitRef{Hash: file.Newest.Hash, Time: file.Newest.Time, Subject: subject}
+		d.files[l.File] = file
+	}
+	return nil
+}
+
+// sectionDate is the newest commit blamed for lines start..end of doc.
+func (d *historyDates) sectionDate(doc string, start, end int) (detect.CommitRef, bool, error) {
 	lines, err := d.git.BlameIgnoring(doc, start, end, d.ignoreRevsFile)
 	if err != nil {
-		return 0, false, fmt.Errorf("blame %s lines %d-%d: %w", doc, start, end, err)
+		return detect.CommitRef{}, false, fmt.Errorf("blame %s lines %d-%d: %w", doc, start, end, err)
 	}
-	var newest int64
+	var newest detect.CommitRef
 	found := false
 	for _, line := range lines {
-		if !found || line.Time > newest {
-			newest, found = line.Time, true
+		if !found || line.Time > newest.Time {
+			newest, found = detect.CommitRef{Hash: line.Commit, Time: line.Time}, true
 		}
 	}
 	return newest, found, nil

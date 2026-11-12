@@ -38,12 +38,13 @@ func failsAt(drifts []detect.Drift, threshold config.SeverityLevel) bool {
 	return false
 }
 
-// classifyDrifts sets the severity of diff-mode drifts: it reads the mapped
-// files of the drifted sections at the merge base and at HEAD and hands them to
-// the pure detect.Classify.
-func classifyDrifts(git *gitx.Client, base string, docs []links.DocLinks, sections map[string][]docparse.Section, changes []gitx.Change, drifts []detect.Drift) ([]detect.Drift, error) {
+// classifyEvaluations sets the severity of the diff-mode drifts: it reads the
+// mapped files of the drifted sections at the merge base and at HEAD and hands
+// them to the pure detect.Classify (through Evaluations.WithSeverity).
+func classifyEvaluations(git *gitx.Client, base string, docs []links.DocLinks, sections map[string][]docparse.Section, changes []gitx.Change, evals detect.Evaluations) (detect.Evaluations, error) {
+	drifts := evals.Drifts()
 	if len(drifts) == 0 {
-		return drifts, nil
+		return evals, nil
 	}
 	mergeBase, err := git.MergeBase(base)
 	if err != nil {
@@ -60,7 +61,7 @@ func classifyDrifts(git *gitx.Client, base string, docs []links.DocLinks, sectio
 			versions[file] = version
 		}
 	}
-	return detect.Classify(docs, references(sections, drifts), versions, drifts), nil
+	return evals.WithSeverity(docs, references(sections, drifts), versions), nil
 }
 
 // references extracts the references of the drifted sections.
