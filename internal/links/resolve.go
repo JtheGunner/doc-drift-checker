@@ -22,6 +22,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	mdtext "github.com/yuin/goldmark/text"
+
 	"github.com/JtheGunner/doc-drift-checker/internal/config"
 	"github.com/JtheGunner/doc-drift-checker/internal/docparse"
 )
@@ -114,6 +118,8 @@ func resolveSection(docPath string, full, own docparse.Section, cfg config.Confi
 
 	byFile := map[string]Origin{}
 	var missing []Missing
+	// A section with any explicit link set (annotation or config) drops all
+	// implicit links, even when every explicit glob matches nothing.
 	explicit := false
 
 	addGlobs := func(globs []string, origin Origin) {
@@ -176,15 +182,43 @@ func rank(o Origin) int {
 	}
 }
 
+// annotationGlobs returns the globs of every "<!-- drift: ... -->" that is a
+// real HTML comment: only HTML blocks and inline raw HTML count, never code
+// spans, fenced code blocks or indented code blocks.
 func annotationGlobs(text string) []string {
+	src := []byte(text)
+	root := goldmark.New().Parser().Parse(mdtext.NewReader(src))
 	var globs []string
-	for _, m := range annotationPattern.FindAllStringSubmatch(text, -1) {
-		for _, glob := range strings.Split(m[1], ",") {
-			if glob = strings.TrimSpace(glob); glob != "" {
-				globs = append(globs, glob)
+	collect := func(html string) {
+		for _, m := range annotationPattern.FindAllStringSubmatch(html, -1) {
+			for _, glob := range strings.Split(m[1], ",") {
+				if glob = strings.TrimSpace(glob); glob != "" {
+					globs = append(globs, glob)
+				}
 			}
 		}
 	}
+	_ = ast.Walk(root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		var b strings.Builder
+		switch v := n.(type) {
+		case *ast.HTMLBlock:
+			for i := 0; i < v.Lines().Len(); i++ {
+				seg := v.Lines().At(i)
+				b.Write(seg.Value(src))
+			}
+			collect(b.String())
+		case *ast.RawHTML:
+			for i := 0; i < v.Segments.Len(); i++ {
+				seg := v.Segments.At(i)
+				b.Write(seg.Value(src))
+			}
+			collect(b.String())
+		}
+		return ast.WalkContinue, nil
+	})
 	return globs
 }
 

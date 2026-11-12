@@ -209,6 +209,41 @@ func TestUnmappedPreambleIsOmitted(t *testing.T) {
 	}
 }
 
+func TestAnnotationsInsideCodeDoNotCount(t *testing.T) {
+	tests := []struct{ name, body string }{
+		{"inline code span", "Use `<!-- drift: cmd/** -->` to annotate."},
+		{"fenced code block", "```md\n<!-- drift: cmd/** -->\n```"},
+		{"indented code block", "Prose.\n\n    <!-- drift: cmd/** -->\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := "# T\n\n## S\n\n" + tt.body + "\n\nSee `internal/cli/root.go`.\n"
+			got := section(t, resolve(t, doc, config.Defaults()), "S")
+			want := []links.Link{{File: "internal/cli/root.go", Origin: links.OriginImplicit}}
+			if !reflect.DeepEqual(got.Links, want) || len(got.Missing) != 0 {
+				t.Fatalf("code must not be an annotation, implicit links must stay: %+v", got)
+			}
+		})
+	}
+}
+
+func TestAnnotationAsOwnCommentLineCounts(t *testing.T) {
+	doc := "# T\n\n## S\n\n<!-- drift: cmd/** -->\n"
+	got := section(t, resolve(t, doc, config.Defaults()), "S")
+	if len(got.Links) != 1 || got.Links[0].Origin != links.OriginAnnotation {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestAnnotationAfterProseCounts(t *testing.T) {
+	doc := "# T\n\n## S\n\nSome prose here. <!-- drift: cmd/** --> more prose.\n\nSee `internal/cli/root.go`.\n"
+	got := section(t, resolve(t, doc, config.Defaults()), "S")
+	want := []links.Link{{File: "cmd/app/main.go", Origin: links.OriginAnnotation}}
+	if !reflect.DeepEqual(got.Links, want) {
+		t.Fatalf("got %+v", got)
+	}
+}
+
 func TestSectionMetadata(t *testing.T) {
 	d := resolve(t, "# T\n\n## S\n\ntext\n", config.Defaults())
 	s := section(t, d, "S")
