@@ -1,16 +1,8 @@
 package cli
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
-
 	"github.com/spf13/cobra"
 
-	"github.com/JtheGunner/doc-drift-checker/internal/config"
-	"github.com/JtheGunner/doc-drift-checker/internal/docparse"
-	"github.com/JtheGunner/doc-drift-checker/internal/fsx"
-	"github.com/JtheGunner/doc-drift-checker/internal/gitx"
 	"github.com/JtheGunner/doc-drift-checker/internal/links"
 )
 
@@ -38,35 +30,15 @@ func newLinksCmd() *cobra.Command {
 	return cmd
 }
 
-// buildLinksReport gathers the inputs (repository root, config, tracked files,
-// document contents) and resolves every configured documentation file.
+// buildLinksReport resolves every configured documentation file against the tracked files.
 func buildLinksReport() (links.Report, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return links.Report{}, fmt.Errorf("get working directory: %w", err)
-	}
-	git := gitx.New(wd)
-	root, err := git.Root()
-	if err != nil {
-		return links.Report{}, fmt.Errorf("find repository root: %w", err)
-	}
-	cfg, err := config.Load(root)
+	in, err := loadRepoInputs()
 	if err != nil {
 		return links.Report{}, err
 	}
-	tracked, err := git.TrackedFiles()
+	docs, err := in.resolveDocs(in.tracked)
 	if err != nil {
 		return links.Report{}, err
 	}
-
-	report := links.Report{Docs: []links.DocLinks{}}
-	for _, doc := range links.MatchDocs(cfg.Docs, tracked) {
-		src, err := fsx.ReadRegularFile(root, filepath.FromSlash(doc))
-		if err != nil {
-			return links.Report{}, fmt.Errorf("read %s: %w", doc, err)
-		}
-		sections := docparse.ParseSections(src)
-		report.Docs = append(report.Docs, links.Resolve(doc, sections, cfg, tracked))
-	}
-	return report, nil
+	return links.Report{Docs: docs}, nil
 }

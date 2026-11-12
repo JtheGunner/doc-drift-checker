@@ -11,10 +11,13 @@ func NewRootCmd(version string) *cobra.Command {
 		Short:   "Report code changes whose README passage did not change",
 		Version: version,
 		Args:    cobra.NoArgs,
+		// Errors are printed by the entry point, which also maps them to exit codes.
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},
 	}
-	root.AddCommand(newLinksCmd())
+	root.AddCommand(newLinksCmd(), newCheckCmd())
 	return root
 }
