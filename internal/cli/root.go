@@ -18,6 +18,6 @@ func NewRootCmd(version string) *cobra.Command {
 			return cmd.Help()
 		},
 	}
-	root.AddCommand(newLinksCmd(), newCheckCmd())
+	root.AddCommand(newLinksCmd(), newCheckCmd(), newAckCmd())
 	return root
 }
