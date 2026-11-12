@@ -1,4 +1,4 @@
-// Package report renders drift findings as text or JSON.
+// Package report renders drift findings as text, JSON, SARIF or GitHub annotations.
 //
 // # JSON schema (schemaVersion 1)
 //
@@ -40,6 +40,18 @@
 //     (flags with leading "--") and the 1-based line in doc
 //
 // New optional fields may be added without a version bump; consumers must ignore unknown fields.
+//
+// # SARIF and GitHub annotations
+//
+// WriteSARIF writes a SARIF 2.1.0 log (one run, rule "doc-drift", one result per
+// drift in report order; high severity is level "error", low is "warning"; the
+// location is the doc file, relative to %SRCROOT%, at the section's first line).
+// WriteGitHub writes one workflow command per drift ("::error" for high,
+// "::warning" for low, with file, line and title properties) and nothing without
+// drift. Both carry no data beyond the JSON report, work in both modes, and
+// neutralise repository-provided text like the explain report does; the
+// annotation properties and message are additionally escaped per the workflow
+// command rules.
 //
 // # Explain JSON schema (schemaVersion 1)
 //

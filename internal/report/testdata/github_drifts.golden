@@ -1,0 +1,2 @@
+::error file=README.md,line=3,title=doc-drift::Section "Usage" may be outdated: linked code changed but the section did not (changed code: a.go, old.go -> new.go). Broken references: flag --gone (line 5); env-var APP_TOKEN (line 6).
+::warning file=docs/x.md,line=9,title=doc-drift::Section "Flags" may be outdated: linked code changed but the section did not (changed code: b.go).

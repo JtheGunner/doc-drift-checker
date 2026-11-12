@@ -300,11 +300,16 @@ func formatTime(unix int64) string {
 // U+FFFD, control and format characters become \xNN or \uNNNN escapes, and the
 // result is cut to maxTextLine characters.
 func clean(s string) string {
+	return cleanMax(s, maxTextLine)
+}
+
+// cleanMax is clean with an explicit cap in characters.
+func cleanMax(s string, limit int) string {
 	s = strings.ToValidUTF8(s, "\uFFFD")
 	var b strings.Builder
 	count := 0
 	for _, r := range s {
-		if count == maxTextLine {
+		if count == limit {
 			b.WriteString("...")
 			break
 		}
