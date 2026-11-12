@@ -1,0 +1,49 @@
+# GoReleaser configuration, see https://goreleaser.com/customization/
+# A release is cut by pushing a v* tag; .github/workflows/release.yml runs it.
+version: 2
+
+project_name: doc-drift-checker
+
+builds:
+  - id: doc-drift-checker
+    main: ./cmd/doc-drift-checker
+    binary: doc-drift-checker
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: checksums.txt
+
+# Release notes are generated from git; CHANGELOG.md stays the curated record.
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+
+release:
+  footer: |
+    See [CHANGELOG.md](https://github.com/JtheGunner/doc-drift-checker/blob/main/CHANGELOG.md) for the curated release notes.
