@@ -84,6 +84,7 @@ func TestHistory(t *testing.T) {
 			if tt.want == nil {
 				tt.want = []detect.Drift{}
 			}
+			tt.want = withLowSeverity(tt.want)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("got %+v\nwant %+v", got, tt.want)
 			}

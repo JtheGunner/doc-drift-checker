@@ -2,6 +2,8 @@ package gitx
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -41,4 +43,22 @@ func (c *Client) MergeBase(base string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(out), nil
+}
+
+// FileSizeAt returns the size in bytes of path at the given revision without
+// reading its content. A file that is absent at that revision yields ErrNotExist.
+func (c *Client) FileSizeAt(rev, path string) (int64, error) {
+	out, err := c.run("cat-file", "-s", rev+":"+path)
+	if err != nil {
+		var gerr *Error
+		if errors.As(err, &gerr) && isMissingPath(gerr.Stderr) {
+			return 0, ErrNotExist
+		}
+		return 0, err
+	}
+	size, err := strconv.ParseInt(strings.TrimSpace(out), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse size of %s:%s: %w", rev, path, err)
+	}
+	return size, nil
 }
