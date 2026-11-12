@@ -1,0 +1,26 @@
+Section:  Usage
+Key:      README.md#usage
+Location: README.md:3 (own lines 3-6)
+Mode:     history
+
+Verdict:  no drift
+Reason:   no mapped file is newer than the section's own lines
+
+Links:
+  src/a.go (implicit)
+  src/gen_test.go (implicit)
+
+Ignore rules: none
+
+Files:
+  src/a.go (implicit)
+    newest commit: aaaaaaaa 2024-01-01T12:01:00Z code
+    newer than the section: no
+  src/gen_test.go (implicit)
+    ignored: matches ignore glob "**/*_test.go", not dated
+
+Section's own lines (3-6):
+  newest commit: cccccccc 2024-01-01T12:02:00Z
+
+Lockfile doc-drift.lock:
+  no entry for this section

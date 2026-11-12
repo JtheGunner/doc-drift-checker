@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "mode": "diff",
+  "base": "main",
+  "section": {
+    "key": "README.md#usage",
+    "doc": "README.md",
+    "anchor": "usage",
+    "heading": "Usage",
+    "line": 3,
+    "ownRange": {
+      "start": 3,
+      "end": 6
+    }
+  },
+  "verdict": "drift",
+  "reason": "code-changed",
+  "severity": "high",
+  "triggeringFiles": [
+    "src/a.go"
+  ],
+  "brokenReferences": [
+    {
+      "kind": "flag",
+      "value": "--gone",
+      "line": 4
+    }
+  ],
+  "links": [
+    {
+      "file": "src/a.go",
+      "origin": "annotation"
+    },
+    {
+      "file": "src/b.go",
+      "origin": "config"
+    },
+    {
+      "file": "src/c_test.go",
+      "origin": "implicit"
+    },
+    {
+      "file": "src/d.go",
+      "origin": "implicit"
+    }
+  ],
+  "unresolved": [
+    {
+      "ref": "gone/**",
+      "origin": "annotation"
+    },
+    {
+      "ref": "docs/x.md",
+      "origin": "implicit",
+      "line": 5
+    }
+  ],
+  "unmapped": false,
+  "ignoreRules": [
+    "**/*_test.go",
+    "vendor/**"
+  ],
+  "files": [
+    {
+      "path": "src/a.go",
+      "origin": "annotation",
+      "triggers": true,
+      "changes": [
+        {
+          "status": "M",
+          "path": "src/a.go",
+          "relevance": {
+            "relevant": true,
+            "reason": "api-changed",
+            "analyzer": ".go"
+          }
+        }
+      ],
+      "commits": [
+        {
+          "hash": "0123456789abcdef0123456789abcdef01234567",
+          "date": "2024-01-01T12:02:00Z",
+          "subject": "change the API"
+        },
+        {
+          "hash": "89abcdef0123456789abcdef0123456789abcdef",
+          "date": "2024-01-01T12:01:00Z",
+          "subject": "first edit"
+        }
+      ],
+      "commitsTruncated": true,
+      "newestCommit": null
+    },
+    {
+      "path": "src/b.go",
+      "origin": "config",
+      "triggers": false,
+      "changes": [
+        {
+          "status": "M",
+          "path": "src/b.go",
+          "relevance": {
+            "relevant": false,
+            "reason": "api-unchanged",
+            "analyzer": ".go"
+          }
+        }
+      ],
+      "commits": [],
+      "commitsTruncated": false,
+      "newestCommit": null
+    },
+    {
+      "path": "src/c_test.go",
+      "origin": "implicit",
+      "triggers": false,
+      "changes": [
+        {
+          "status": "M",
+          "path": "src/c_test.go",
+          "relevance": {
+            "relevant": false,
+            "reason": "ignored-path",
+            "glob": "**/*_test.go"
+          }
+        }
+      ],
+      "commits": [],
+      "commitsTruncated": false,
+      "newestCommit": null
+    },
+    {
+      "path": "src/d.go",
+      "origin": "implicit",
+      "triggers": false,
+      "changes": [],
+      "commits": [],
+      "commitsTruncated": false,
+      "newestCommit": null
+    }
+  ],
+  "own": {
+    "docChanged": false,
+    "hunks": []
+  },
+  "sectionDate": null,
+  "lock": {
+    "state": "mismatch",
+    "differing": [
+      "src/a.go"
+    ],
+    "effect": "no-effect",
+    "driftedBeforeLock": true
+  }
+}
