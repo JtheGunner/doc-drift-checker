@@ -33,6 +33,10 @@ import (
 // expanded size of each symbol (maxSymbolNodes) and of the whole file
 // (maxFileNodes); a source above either limit counts as changed (fail closed).
 //
+// Hostile input is bounded before any recursive pass: sources above
+// maxSourceBytes and trees nested deeper than maxASTDepth (checked iteratively)
+// count as changed (fail closed), so a crafted file cannot exhaust the stack.
+//
 // Known limits: there is no type-checking. Exported consts, vars and types that
 // refer to unexported package-level identifiers are compared textually, so a
 // change of the referenced declaration (for example "const Max = max" with max
@@ -51,6 +55,11 @@ type goAnalyzer struct{}
 const (
 	maxSymbolNodes = 1 << 14
 	maxFileNodes   = 1 << 17
+	// maxASTDepth caps the nesting depth of the parsed file; real code never
+	// nests this deep. Every recursive pass runs only on trees under the cap.
+	maxASTDepth = 1 << 10
+	// maxSourceBytes caps the size of one analyzed source file.
+	maxSourceBytes = 8 << 20
 )
 
 func (goAnalyzer) Extensions() []string { return []string{".go"} }
@@ -97,9 +106,17 @@ func goExportedAPI(src []byte) (surface goSurface, ok bool) {
 	if len(src) == 0 {
 		return surface, true
 	}
+	if len(src) > maxSourceBytes {
+		return goSurface{}, false
+	}
 	// Declarations are parsed without comments, so comments can never influence them.
 	file, err := parser.ParseFile(token.NewFileSet(), "", src, parser.SkipObjectResolution)
 	if err != nil {
+		return goSurface{}, false
+	}
+	// Every pass below recurses by tree depth, so the depth is bounded first,
+	// with an iterative walk that cannot overflow the stack itself.
+	if exceedsDepth(reflect.ValueOf(file.Decls), maxASTDepth) {
 		return goSurface{}, false
 	}
 	surface.header = goFileHeader(src, file.Name.Name)
@@ -277,6 +294,40 @@ func addGoValueSpec(api map[string]string, budget *nodeBudget, tok token.Token, 
 		api[tok.String()+" "+name.Name] = text
 	}
 	return true
+}
+
+// exceedsDepth reports whether the AST below v nests deeper than limit nodes.
+// It uses an explicit stack instead of recursion, so a hostile, extremely deep
+// tree (for example a million chained binary operators) cannot crash the process.
+func exceedsDepth(v reflect.Value, limit int) bool {
+	type item struct {
+		value reflect.Value
+		depth int
+	}
+	stack := []item{{v, 0}}
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		value, depth := cur.value, cur.depth
+		switch value.Kind() {
+		case reflect.Pointer, reflect.Interface:
+			if !value.IsNil() {
+				stack = append(stack, item{value.Elem(), depth})
+			}
+		case reflect.Slice:
+			for i := 0; i < value.Len(); i++ {
+				stack = append(stack, item{value.Index(i), depth})
+			}
+		case reflect.Struct:
+			if depth+1 > limit {
+				return true
+			}
+			for i := 0; i < value.NumField(); i++ {
+				stack = append(stack, item{value.Field(i), depth + 1})
+			}
+		}
+	}
+	return false
 }
 
 // nodeBudget accumulates the expanded size of everything canonicalized in one file.
