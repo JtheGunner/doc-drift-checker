@@ -10,6 +10,7 @@ import (
 	"github.com/JtheGunner/doc-drift-checker/internal/config"
 	"github.com/JtheGunner/doc-drift-checker/internal/detect"
 	"github.com/JtheGunner/doc-drift-checker/internal/gitx"
+	"github.com/JtheGunner/doc-drift-checker/internal/lock"
 	"github.com/JtheGunner/doc-drift-checker/internal/relevance"
 	"github.com/JtheGunner/doc-drift-checker/internal/report"
 )
@@ -62,6 +63,12 @@ func newCheckCmd() *cobra.Command {
 			"and are not common words); code comments count as occurrences, so a removed flag still " +
 			"mentioned in a comment is not detected; mapped files above 4 MiB are unknown and never " +
 			"make a drift high. History mode has no base version, so every drift there is low.\n\n" +
+			"Acknowledged sections: a section with an entry in " + lock.FileName + " (see the ack " +
+			"command) is decided by the lockfile. Diff mode suppresses its drift while the mapped " +
+			"code equals the acknowledged state; history mode ignores dates for it and reports a " +
+			"drift iff the mapped code differs from that state (run ack again after updating the " +
+			"docs). Only path ignore rules apply to this comparison; whitespace and symbol " +
+			"relevance cannot be evaluated against stored hashes. A malformed lockfile is an error.\n\n" +
 			"Exit codes: 0 no drift (or none at or above the minimum severity), 1 drift found, " +
 			"2 usage or runtime error. --min-severity low|high sets the lowest severity that exits 1 " +
 			"(default: severity.fail-on from .docdrift.yaml, which defaults to low); all drifts are " +
@@ -155,6 +162,10 @@ func runDiffCheck(base string) (checkResult, error) {
 	if err != nil {
 		return checkResult{}, err
 	}
+	locked, err := loadLock(in.root)
+	if err != nil {
+		return checkResult{}, err
+	}
 	changes, err := in.git.ChangedFiles(base)
 	if err != nil {
 		return checkResult{}, err
@@ -182,6 +193,13 @@ func runDiffCheck(base string) (checkResult, error) {
 		return checkResult{}, err
 	}
 	drifts := detect.Detect(detect.Input{Docs: docs, Changes: detectChanges(relevant), DocChanges: docChanges})
+	// A drift of a section whose code still equals its acknowledged state is
+	// dropped; this runs before severity so suppressed sections are not read.
+	verdicts, err := lockVerdicts(gitx.New(in.root), relevance.NewFilter(in.cfg.Ignore), docs, locked)
+	if err != nil {
+		return checkResult{}, err
+	}
+	drifts = detect.ApplyLock(docs, drifts, verdicts, false)
 	// Severity reads the mapped files of every drifted section, so it sees the
 	// unfiltered change list: a file the relevance filter dropped still holds
 	// (or no longer holds) the referenced names.

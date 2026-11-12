@@ -1,11 +1,11 @@
 package detect_test
 
 import (
-	"github.com/JtheGunner/doc-drift-checker/internal/docparse"
 	"reflect"
 	"testing"
 
 	"github.com/JtheGunner/doc-drift-checker/internal/detect"
+	"github.com/JtheGunner/doc-drift-checker/internal/docparse"
 )
 
 func TestApplyLock(t *testing.T) {
