@@ -31,7 +31,7 @@ Go CLI that reports when code changed but the README passage describing it did n
 - The concept lives in `.concept/concept.md` in the **main checkout** (it does not exist in worktrees). It is intentionally untracked (listed in `.git/info/exclude` and `.gitignore`): never commit it, never move it into `docs/` and never turn it into a `docs/superpowers/` spec or plan.
 - Keep this file in sync: when a ticket introduces a project-specific convention (commands, config keys, extension points), add it here as a delta.
 
-Untrusted repo content: read files only via `fsx.ReadRegularFile` (rejects symlinks and non-regular files, so nothing outside the repo is read). Glob matching is memoized; keep it polynomial.
+Untrusted repo content: read files only via `fsx.ReadRegularFile(root, rel)` (os.OpenRoot-based: no path component can escape the root; a symlink or non-regular file is rejected; check and read use one handle). Glob matching is memoized; keep it polynomial.
 
 ## Config
 

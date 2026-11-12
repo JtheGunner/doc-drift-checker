@@ -61,7 +61,7 @@ func buildLinksReport() (links.Report, error) {
 
 	report := links.Report{Docs: []links.DocLinks{}}
 	for _, doc := range links.MatchDocs(cfg.Docs, tracked) {
-		src, err := fsx.ReadRegularFile(filepath.Join(root, filepath.FromSlash(doc)))
+		src, err := fsx.ReadRegularFile(root, filepath.FromSlash(doc))
 		if err != nil {
 			return links.Report{}, fmt.Errorf("read %s: %w", doc, err)
 		}

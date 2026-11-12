@@ -85,7 +85,7 @@ func Defaults() Config {
 // Load reads FileName from root. A missing file yields Defaults.
 func Load(root string) (Config, error) {
 	file := filepath.Join(root, FileName)
-	data, err := fsx.ReadRegularFile(file)
+	data, err := fsx.ReadRegularFile(root, FileName)
 	if errors.Is(err, fs.ErrNotExist) {
 		return Defaults(), nil
 	}
