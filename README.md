@@ -192,7 +192,7 @@ doc-drift-checker explain usage --base origin/main
 ```text
 Section:  Usage
 Key:      README.md#usage
-Mode:     diff (base main)
+Mode:     diff (base origin/main)
 
 Verdict:  no drift
 Reason:   all changes to mapped files are dropped by the relevance rules
@@ -283,7 +283,7 @@ severity:
 | `docs` | `["README.md"]` | Documentation files to check. |
 | `ignore` | tests, generated code, lockfiles and vendored code | Globs of paths whose changes never cause drift. |
 | `mappings` | none | Section-to-code links by heading text or anchor. |
-| `mode.default` | `diff` | `diff` or `history`. **Reserved:** `check` does not apply it yet. It selects history mode without `--base` and diff mode with `--base`. |
+| `mode.default` | `diff` | `diff` or `history`. **Reserved:** `check` does not apply it yet. The mode is chosen only by the presence of `--base` (diff mode with it, history mode without). |
 | `severity.fail-on` | `low` | Lowest severity that makes `check` exit `1`. The `--min-severity` flag wins. |
 
 > [!IMPORTANT]
