@@ -6,35 +6,69 @@ import (
 )
 
 // matchGlob reports whether the slash-separated name matches glob.
-// A "**" segment matches zero or more path segments; every other segment is
-// matched with path.Match, so "*" and "?" never cross a "/". Malformed
-// patterns match nothing (config validates glob syntax up front).
+// A "**" segment matches zero or more path segments, except a trailing "**",
+// which needs at least one; every other segment is matched with path.Match,
+// so "*" and "?" never cross a "/". Malformed patterns match nothing (config
+// validates glob syntax up front).
+//
+// Runs of "**" are collapsed and matching is memoized on (pattern index,
+// name index), so the cost is bounded by pattern segments times name segments
+// even for hostile patterns.
 func matchGlob(glob, name string) bool {
-	return matchSegments(strings.Split(glob, "/"), strings.Split(name, "/"))
+	pattern := collapseDoubleStars(strings.Split(glob, "/"))
+	names := strings.Split(name, "/")
+	// memo[p][n]: 0 = unknown, 1 = no match, 2 = match.
+	memo := make([][]uint8, len(pattern)+1)
+	for i := range memo {
+		memo[i] = make([]uint8, len(names)+1)
+	}
+	return matchSegments(pattern, names, 0, 0, memo)
 }
 
-func matchSegments(pattern, name []string) bool {
-	for len(pattern) > 0 {
-		if pattern[0] == "**" {
-			rest := pattern[1:]
-			if len(rest) == 0 {
-				return len(name) > 0
-			}
-			for i := 0; i <= len(name); i++ {
-				if matchSegments(rest, name[i:]) {
-					return true
-				}
-			}
-			return false
+func collapseDoubleStars(segments []string) []string {
+	out := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		if segment == "**" && len(out) > 0 && out[len(out)-1] == "**" {
+			continue
 		}
-		if len(name) == 0 {
-			return false
-		}
-		ok, err := path.Match(pattern[0], name[0])
-		if err != nil || !ok {
-			return false
-		}
-		pattern, name = pattern[1:], name[1:]
+		out = append(out, segment)
 	}
-	return len(name) == 0
+	return out
+}
+
+func matchSegments(pattern, names []string, p, n int, memo [][]uint8) bool {
+	if memo[p][n] != 0 {
+		return memo[p][n] == 2
+	}
+	result := matchSegmentsUncached(pattern, names, p, n, memo)
+	memo[p][n] = 1
+	if result {
+		memo[p][n] = 2
+	}
+	return result
+}
+
+func matchSegmentsUncached(pattern, names []string, p, n int, memo [][]uint8) bool {
+	if p == len(pattern) {
+		return n == len(names)
+	}
+	if pattern[p] == "**" {
+		if p == len(pattern)-1 {
+			return n < len(names)
+		}
+		for i := n; i <= len(names); i++ {
+			if matchSegments(pattern, names, p+1, i, memo) {
+				return true
+			}
+		}
+		return false
+	}
+	if n == len(names) {
+		return false
+	}
+	ok, err := path.Match(pattern[p], names[n])
+	if err != nil || !ok {
+		return false
+	}
+	return matchSegments(pattern, names, p+1, n+1, memo)
 }

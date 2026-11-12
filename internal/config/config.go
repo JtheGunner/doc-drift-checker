@@ -15,13 +15,14 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"os"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/JtheGunner/doc-drift-checker/internal/fsx"
 )
 
 // FileName is the name of the config file in the repository root.
@@ -84,7 +85,7 @@ func Defaults() Config {
 // Load reads FileName from root. A missing file yields Defaults.
 func Load(root string) (Config, error) {
 	file := filepath.Join(root, FileName)
-	data, err := os.ReadFile(file)
+	data, err := fsx.ReadRegularFile(root, FileName)
 	if errors.Is(err, fs.ErrNotExist) {
 		return Defaults(), nil
 	}

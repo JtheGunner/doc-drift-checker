@@ -2,6 +2,8 @@ package cli_test
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -104,5 +106,41 @@ func TestLinksCommandInvalidConfigFails(t *testing.T) {
 	t.Chdir(r.Dir)
 	if _, err := run(t, "dev", "links"); err == nil {
 		t.Fatal("expected an error for an invalid config")
+	}
+}
+
+func TestLinksCommandRejectsSymlinkedDoc(t *testing.T) {
+	outsideFile := filepath.Join(t.TempDir(), "secret.md")
+	if err := os.WriteFile(outsideFile, []byte("# Secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tests := map[string]func(r *testutil.Repo) string{
+		"outside the repo": func(*testutil.Repo) string { return outsideFile },
+		"inside the repo": func(r *testutil.Repo) string {
+			r.Write("docs/real.md", "# Real\n")
+			return filepath.Join(r.Dir, "docs", "real.md")
+		},
+	}
+	for name, target := range tests {
+		t.Run(name, func(t *testing.T) {
+			r := testutil.NewRepo(t)
+			targetPath := target(r)
+			if err := os.Symlink(targetPath, filepath.Join(r.Dir, "README.md")); err != nil {
+				t.Skipf("symlinks unsupported: %v", err)
+			}
+			r.Commit("base")
+			t.Chdir(r.Dir)
+			_, err := run(t, "dev", "links")
+			if err == nil || !strings.Contains(err.Error(), "README.md") || !strings.Contains(err.Error(), "regular file") {
+				t.Fatalf("expected an error naming README.md, got %v", err)
+			}
+		})
+	}
+}
+
+func TestLinksCommandReadsRegularDoc(t *testing.T) {
+	linksRepo(t)
+	if _, err := run(t, "dev", "links"); err != nil {
+		t.Fatalf("regular doc file must still work: %v", err)
 	}
 }

@@ -17,7 +17,7 @@ Go CLI that reports when code changed but the README passage describing it did n
 
 ## Layout
 
-`cmd/doc-drift-checker` (thin entry point), `internal/cli` (cobra commands, testable via `NewRootCmd`), `internal/{config,docparse,gitx,links,detect,relevance,report,testutil}`. Create a package only when a ticket needs it. Keep each package single-purpose; `docparse` and reference extraction stay pure (no filesystem or git access).
+`cmd/doc-drift-checker` (thin entry point), `internal/cli` (cobra commands, testable via `NewRootCmd`), `internal/{config,docparse,fsx,gitx,links,detect,relevance,report,testutil}`. Create a package only when a ticket needs it. Keep each package single-purpose; `docparse` and reference extraction stay pure (no filesystem or git access).
 
 ## Testing
 
@@ -30,6 +30,8 @@ Go CLI that reports when code changed but the README passage describing it did n
 - Work is tracked as YouTrack tickets (project `DDC`, `/youtrack-task`), one per part of the concept. Implement a ticket's acceptance criteria and nothing beyond.
 - The concept lives in `.concept/concept.md` in the **main checkout** (it does not exist in worktrees). It is intentionally untracked (listed in `.git/info/exclude` and `.gitignore`): never commit it, never move it into `docs/` and never turn it into a `docs/superpowers/` spec or plan.
 - Keep this file in sync: when a ticket introduces a project-specific convention (commands, config keys, extension points), add it here as a delta.
+
+Untrusted repo content: read files only via `fsx.ReadRegularFile(root, rel)` (os.OpenRoot-based: no path component can escape the root; a symlink or non-regular file is rejected; check and read use one handle). Glob matching is memoized; keep it polynomial.
 
 ## Config
 
