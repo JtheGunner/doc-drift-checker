@@ -1,5 +1,6 @@
 // Package ciconfig pins the structure of the CI integration files at the
-// repository root (action.yml, .pre-commit-hooks.yaml). It has no
+// repository root (action.yml, .pre-commit-hooks.yaml) and of the release
+// automation (.goreleaser.yaml, release workflow). It has no
 // non-test code and needs no network access.
 package ciconfig
 
@@ -192,5 +193,136 @@ func TestPreCommitHookDefinition(t *testing.T) {
 	}
 	if h.Name == "" || h.Description == "" || len(h.Description) > 120 {
 		t.Errorf("name and a short description are required: %+v", h)
+	}
+}
+
+type releaseWorkflow struct {
+	Name string `yaml:"name"`
+	On   struct {
+		Push struct {
+			Tags     []string `yaml:"tags"`
+			Branches []string `yaml:"branches"`
+		} `yaml:"push"`
+	} `yaml:"on"`
+	Permissions map[string]string `yaml:"permissions"`
+	Jobs        map[string]struct {
+		RunsOn      string            `yaml:"runs-on"`
+		Permissions map[string]string `yaml:"permissions"`
+		Steps       []actionStep      `yaml:"steps"`
+	} `yaml:"jobs"`
+}
+
+func readStrict(t *testing.T, path string, out any) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dec := yaml.NewDecoder(strings.NewReader(string(data)))
+	dec.KnownFields(true)
+	if err := dec.Decode(out); err != nil {
+		t.Fatalf("%s: %v", path, err)
+	}
+}
+
+func TestReleaseWorkflow(t *testing.T) {
+	var w releaseWorkflow
+	readStrict(t, ".github/workflows/release.yml", &w)
+
+	if len(w.On.Push.Tags) != 1 || w.On.Push.Tags[0] != "v*" || len(w.On.Push.Branches) != 0 {
+		t.Errorf("trigger must be exactly push of v* tags: %+v", w.On.Push)
+	}
+	if len(w.Permissions) != 1 || w.Permissions["contents"] != "read" {
+		t.Errorf("top-level permissions = %v, want contents: read only", w.Permissions)
+	}
+	if len(w.Jobs) != 1 {
+		t.Fatalf("jobs = %d, want 1", len(w.Jobs))
+	}
+	for name, job := range w.Jobs {
+		if len(job.Permissions) != 1 || job.Permissions["contents"] != "write" {
+			t.Errorf("job %s permissions = %v, want contents: write only", name, job.Permissions)
+		}
+		var sawFullHistory, sawGoreleaser bool
+		for _, step := range job.Steps {
+			if strings.Contains(step.Run, "${{") {
+				t.Errorf("expression inside run block:\n%s", step.Run)
+			}
+			if strings.HasPrefix(step.Uses, "actions/checkout@") && step.With["fetch-depth"] == "0" {
+				sawFullHistory = true
+			}
+			if strings.HasPrefix(step.Uses, "goreleaser/goreleaser-action@") {
+				sawGoreleaser = true
+				if step.With["args"] != "release --clean" {
+					t.Errorf("goreleaser args = %q", step.With["args"])
+				}
+				if len(step.Env) != 1 || step.Env["GITHUB_TOKEN"] != "${{ secrets.GITHUB_TOKEN }}" {
+					t.Errorf("goreleaser env = %v, want only GITHUB_TOKEN from secrets.GITHUB_TOKEN", step.Env)
+				}
+			}
+		}
+		if !sawFullHistory || !sawGoreleaser {
+			t.Errorf("job %s needs a full-history checkout and a GoReleaser step", name)
+		}
+	}
+}
+
+type goreleaserConfig struct {
+	Version     int    `yaml:"version"`
+	ProjectName string `yaml:"project_name"`
+	Builds      []struct {
+		ID      string   `yaml:"id"`
+		Main    string   `yaml:"main"`
+		Binary  string   `yaml:"binary"`
+		Env     []string `yaml:"env"`
+		Goos    []string `yaml:"goos"`
+		Goarch  []string `yaml:"goarch"`
+		Flags   []string `yaml:"flags"`
+		Ldflags []string `yaml:"ldflags"`
+	} `yaml:"builds"`
+	Archives []struct {
+		ID           string   `yaml:"id"`
+		Formats      []string `yaml:"formats"`
+		NameTemplate string   `yaml:"name_template"`
+		Files        []string `yaml:"files"`
+	} `yaml:"archives"`
+	Checksum  map[string]string `yaml:"checksum"`
+	Changelog map[string]any    `yaml:"changelog"`
+	Release   map[string]string `yaml:"release"`
+}
+
+func TestGoReleaserConfig(t *testing.T) {
+	var c goreleaserConfig
+	readStrict(t, ".goreleaser.yaml", &c)
+
+	if c.Version != 2 {
+		t.Errorf("version = %d, want 2", c.Version)
+	}
+	if len(c.Builds) != 1 {
+		t.Fatalf("builds = %d, want 1", len(c.Builds))
+	}
+	b := c.Builds[0]
+	if b.Main != "./cmd/doc-drift-checker" {
+		t.Errorf("main = %q", b.Main)
+	}
+	if strings.Join(b.Env, ",") != "CGO_ENABLED=0" {
+		t.Errorf("env = %v, want CGO_ENABLED=0", b.Env)
+	}
+	if strings.Join(b.Goos, ",") != "darwin,linux" || strings.Join(b.Goarch, ",") != "amd64,arm64" {
+		t.Errorf("targets = %v x %v, want darwin,linux x amd64,arm64", b.Goos, b.Goarch)
+	}
+	if !strings.Contains(strings.Join(b.Ldflags, " "), "-X main.version={{.Version}}") {
+		t.Errorf("ldflags %v do not inject main.version", b.Ldflags)
+	}
+	if len(c.Archives) != 1 || strings.Join(c.Archives[0].Formats, ",") != "tar.gz" {
+		t.Fatalf("archives = %+v, want one tar.gz archive", c.Archives)
+	}
+	files := strings.Join(c.Archives[0].Files, ",")
+	for _, want := range []string{"LICENSE", "README.md", "CHANGELOG.md"} {
+		if !strings.Contains(files, want) {
+			t.Errorf("archive does not include %s", want)
+		}
+	}
+	if c.Checksum["name_template"] == "" {
+		t.Error("checksums are not configured")
 	}
 }
