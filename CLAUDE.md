@@ -55,6 +55,12 @@ Exit codes: 0 no drift, 1 drift, 2 usage/runtime error (`cli.ExitCode`, handled 
 
 CI integrations at the repo root: `action.yml` (composite action: validates inputs, `go install`, fetches `origin/<base>`, runs `check --base origin/<base> --format ...`; every `${{ }}` value reaches the shell through `env:` only) and `.pre-commit-hooks.yaml` (hook `doc-drift-checker`, pre-push, runs history mode unless `args: ["--base", ...]` is given). `ci_files_test.go` pins their structure (no `${{` in `run:` blocks). Usage examples live in `docs/ci-integration.md`; keep them in sync with the action inputs.
 
+## Release
+
+`.goreleaser.yaml` (v2: darwin/linux x amd64/arm64, `CGO_ENABLED=0`, `-X main.version={{.Version}}`, tar.gz with LICENSE, README.md and CHANGELOG.md, `checksums.txt`) and `.github/workflows/release.yml` (runs on a pushed `v*` tag; only the release job has `contents: write`; only `GITHUB_TOKEN`). `ci_files_test.go` pins both files. No Homebrew section exists because no tap exists; add one only together with the tap repository and its token.
+
+Cutting a release: set the date of the version in `CHANGELOG.md` (it reads `Unreleased` until then) and merge to `main`, then tag `vX.Y.Z` on `main` and push the tag. Check the config locally with `goreleaser check` and `goreleaser release --snapshot --clean --skip=publish` (output goes to the gitignored `dist/`). The README and `docs/ci-integration.md` tell users the Action needs a released tag (`v0` is a placeholder).
+
 ## Drift check (history mode)
 
 `check` without `--base` runs history mode (`--base` selects diff mode; config `mode.default` is not wired yet). `detect.History` is the pure core; `internal/cli/history.go` gathers dates. A section drifts when a mapped, non-ignored code file's newest commit (`gitx.CommitTimes`, follows renames) is strictly newer than the newest commit blamed for the section's own lines (`detect.OwnRange`, child sections excluded) at HEAD. Dates are committer times; equal dates are no drift; sections without blame data or mapped files are not reported. `--ignore-revs-file <path>` (history mode only, usage error with `--base`; git's format, parsed by `gitx.ParseIgnoreRevs`, read without `fsx` since it may live outside the repo) is passed to `git blame` and filters the file log. The JSON report has an additive `mode` field (`diff`/`history`); `base` is empty in history mode.
