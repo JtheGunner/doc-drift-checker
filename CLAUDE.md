@@ -30,3 +30,7 @@ Go CLI that reports when code changed but the README passage describing it did n
 - Work is tracked as YouTrack tickets (project `DDC`, `/youtrack-task`), one per part of the concept. Implement a ticket's acceptance criteria and nothing beyond.
 - The concept lives in `.concept/concept.md` in the **main checkout** (it does not exist in worktrees). It is intentionally untracked (listed in `.git/info/exclude` and `.gitignore`): never commit it, never move it into `docs/` and never turn it into a `docs/superpowers/` spec or plan.
 - Keep this file in sync: when a ticket introduces a project-specific convention (commands, config keys, extension points), add it here as a delta.
+
+## Config
+
+`.docdrift.yaml` in the repo root is loaded by `internal/config` (`Load`, `Parse`, `Defaults`). Keys: `docs`, `ignore`, `mappings`, `mode.default`, `severity.default`, `severity.fail-on`. Unknown keys and invalid globs are errors; defaults are documented in the package comment.
