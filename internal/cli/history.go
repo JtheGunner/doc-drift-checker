@@ -13,37 +13,37 @@ import (
 // runHistoryCheck dates every section and its mapped code from the commit
 // history at HEAD and reports sections older than their code. See the detect
 // package comment for the limits of this mode.
-func runHistoryCheck(ignoreRevsFile string) ([]detect.Drift, error) {
+func runHistoryCheck(ignoreRevsFile string) (checkResult, error) {
 	ignoredRevs := map[string]bool{}
 	if ignoreRevsFile != "" {
 		abs, err := filepath.Abs(ignoreRevsFile)
 		if err != nil {
-			return nil, fmt.Errorf("resolve --ignore-revs-file: %w", err)
+			return checkResult{}, fmt.Errorf("resolve --ignore-revs-file: %w", err)
 		}
 		if ignoredRevs, err = gitx.ParseIgnoreRevs(abs); err != nil {
-			return nil, err
+			return checkResult{}, err
 		}
 		ignoreRevsFile = abs
 	}
 	in, err := loadRepoInputs()
 	if err != nil {
-		return nil, err
+		return checkResult{}, err
 	}
 	// Run git from the repository root so every path is root-relative.
 	git := gitx.New(in.root)
 	if err := git.EnsureFullHistory(); err != nil {
-		return nil, err
+		return checkResult{}, err
 	}
 	headFiles, err := git.HeadFiles()
 	if err != nil {
-		return nil, err
+		return checkResult{}, err
 	}
 	// Only files committed at HEAD can be dated; staged-only files and deleted
 	// files are left out of both the document list and the link targets.
 	in.tracked = headFiles
 	docs, err := in.resolveDocs(headFiles)
 	if err != nil {
-		return nil, err
+		return checkResult{}, err
 	}
 	dates := historyDates{
 		git:            git,
@@ -57,7 +57,7 @@ func runHistoryCheck(ignoreRevsFile string) ([]detect.Drift, error) {
 	for _, doc := range docs {
 		for i, section := range doc.Sections {
 			if err := dates.addFiles(section); err != nil {
-				return nil, err
+				return checkResult{}, err
 			}
 			if !dates.hasDatedFile(section) {
 				continue
@@ -65,14 +65,15 @@ func runHistoryCheck(ignoreRevsFile string) ([]detect.Drift, error) {
 			start, end := detect.OwnRange(doc.Sections, i)
 			date, ok, err := dates.sectionDate(doc.Doc, start, end)
 			if err != nil {
-				return nil, err
+				return checkResult{}, err
 			}
 			if ok {
 				sectionDates[detect.SectionKey{Doc: doc.Doc, Line: section.StartLine}] = date
 			}
 		}
 	}
-	return detect.History(detect.HistoryInput{Docs: docs, SectionDates: sectionDates, FileDates: dates.files}), nil
+	drifts := detect.History(detect.HistoryInput{Docs: docs, SectionDates: sectionDates, FileDates: dates.files})
+	return checkResult{drifts: drifts, failOn: in.cfg.Severity.FailOn}, nil
 }
 
 // historyDates gathers commit dates from git. files holds only the dated,

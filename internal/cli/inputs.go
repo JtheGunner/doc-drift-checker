@@ -47,13 +47,23 @@ func loadRepoInputs() (repoInputs, error) {
 // resolveDocs reads every configured documentation file and resolves its
 // sections against the given file list.
 func (in repoInputs) resolveDocs(files []string) ([]links.DocLinks, error) {
+	docs, _, err := in.resolveDocsWithSections(files)
+	return docs, err
+}
+
+// resolveDocsWithSections is resolveDocs that also returns the parsed sections
+// per document, for callers that need the section text.
+func (in repoInputs) resolveDocsWithSections(files []string) ([]links.DocLinks, map[string][]docparse.Section, error) {
 	docs := []links.DocLinks{}
+	parsed := map[string][]docparse.Section{}
 	for _, doc := range links.MatchDocs(in.cfg.Docs, in.tracked) {
 		src, err := fsx.ReadRegularFile(in.root, filepath.FromSlash(doc))
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", doc, err)
+			return nil, nil, fmt.Errorf("read %s: %w", doc, err)
 		}
-		docs = append(docs, links.Resolve(doc, docparse.ParseSections(src), in.cfg, files))
+		sections := docparse.ParseSections(src)
+		parsed[doc] = sections
+		docs = append(docs, links.Resolve(doc, sections, in.cfg, files))
 	}
-	return docs, nil
+	return docs, parsed, nil
 }

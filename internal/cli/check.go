@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/JtheGunner/doc-drift-checker/internal/config"
 	"github.com/JtheGunner/doc-drift-checker/internal/detect"
 	"github.com/JtheGunner/doc-drift-checker/internal/gitx"
 	"github.com/JtheGunner/doc-drift-checker/internal/relevance"
@@ -24,6 +25,7 @@ func newCheckCmd() *cobra.Command {
 		format         string
 		ignoreRevsFile string
 		warnOnly       bool
+		minSeverity    string
 	)
 	cmd := &cobra.Command{
 		Use:   "check [--base <ref>] [--ignore-revs-file <path>]",
@@ -51,24 +53,47 @@ func newCheckCmd() *cobra.Command {
 			"  - Lines deleted from a section are invisible to blame.\n" +
 			"  - Only HEAD is read; uncommitted changes are ignored, and deleted files cannot be dated.\n" +
 			"  - Full history is required; shallow clones are rejected (run git fetch --unshallow).\n\n" +
-			"Exit codes: 0 no drift, 1 drift found, 2 usage or runtime error. " +
-			"--warn-only forces 0 when drift is found.",
+			"Severity: every drift is low or high. A drift is high when a flag, environment " +
+			"variable or identifier named in the section's own text existed in the section's mapped " +
+			"code at the merge base and exists in none of it at HEAD (renamed or removed). Paths, " +
+			"links and commands are not checked (the path mapping covers them), and a reference that " +
+			"was never in the mapped code is not claimed. Limits: matching is literal on whole tokens " +
+			"(a flag matches --name or the quoted bare name; identifiers need three or more characters " +
+			"and are not common words); code comments count as occurrences, so a removed flag still " +
+			"mentioned in a comment is not detected; mapped files above 4 MiB are unknown and never " +
+			"make a drift high. History mode has no base version, so every drift there is low.\n\n" +
+			"Exit codes: 0 no drift (or none at or above the minimum severity), 1 drift found, " +
+			"2 usage or runtime error. --min-severity low|high sets the lowest severity that exits 1 " +
+			"(default: severity.fail-on from .docdrift.yaml, which defaults to low); all drifts are " +
+			"printed regardless. --warn-only forces 0 when drift is found.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			var failOn config.SeverityLevel
+			if cmd.Flags().Changed("min-severity") {
+				level, err := parseSeverity(minSeverity)
+				if err != nil {
+					return &exitError{code: ExitFailure, err: err}
+				}
+				failOn = level
+			}
 			opts := checkOptions{
 				base:           base,
 				diffMode:       cmd.Flags().Changed("base"),
 				format:         format,
 				ignoreRevsFile: ignoreRevsFile,
 			}
-			drifts, err := runCheck(opts)
+			result, err := runCheck(opts)
 			if err != nil {
 				return &exitError{code: ExitFailure, err: err}
+			}
+			drifts := result.drifts
+			if failOn == "" {
+				failOn = result.failOn
 			}
 			if err := writeReport(cmd.OutOrStdout(), opts, drifts); err != nil {
 				return &exitError{code: ExitFailure, err: err}
 			}
-			if len(drifts) > 0 && !warnOnly {
+			if failsAt(drifts, failOn) && !warnOnly {
 				return &exitError{code: ExitDrift}
 			}
 			return nil
@@ -77,6 +102,7 @@ func newCheckCmd() *cobra.Command {
 	cmd.Flags().StringVar(&base, "base", "", "base reference to compare against (diff mode); without it history mode runs")
 	cmd.Flags().StringVar(&format, "format", formatText, "output format: text or json")
 	cmd.Flags().StringVar(&ignoreRevsFile, "ignore-revs-file", "", "history mode only: file of commit hashes to skip when dating (formatting commits)")
+	cmd.Flags().StringVar(&minSeverity, "min-severity", string(config.SeverityLow), "lowest severity that makes the exit code 1: low or high (default: severity.fail-on in .docdrift.yaml, else low)")
 	cmd.Flags().BoolVar(&warnOnly, "warn-only", false, "exit 0 even when drift is found")
 	return cmd
 }
@@ -87,6 +113,13 @@ type checkOptions struct {
 	diffMode       bool
 	format         string
 	ignoreRevsFile string
+}
+
+// checkResult is the outcome of a check run: the drifts and the configured
+// severity at which they fail the run.
+type checkResult struct {
+	drifts []detect.Drift
+	failOn config.SeverityLevel
 }
 
 func writeReport(w io.Writer, opts checkOptions, drifts []detect.Drift) error {
@@ -100,37 +133,37 @@ func writeReport(w io.Writer, opts checkOptions, drifts []detect.Drift) error {
 }
 
 // runCheck validates the flags and runs diff mode (--base given) or history mode.
-func runCheck(opts checkOptions) ([]detect.Drift, error) {
+func runCheck(opts checkOptions) (checkResult, error) {
 	if opts.format != formatText && opts.format != formatJSON {
-		return nil, fmt.Errorf("invalid --format %q: use %s or %s", opts.format, formatText, formatJSON)
+		return checkResult{}, fmt.Errorf("invalid --format %q: use %s or %s", opts.format, formatText, formatJSON)
 	}
 	if !opts.diffMode {
 		return runHistoryCheck(opts.ignoreRevsFile)
 	}
 	if opts.base == "" {
-		return nil, errors.New("--base needs a reference")
+		return checkResult{}, errors.New("--base needs a reference")
 	}
 	if opts.ignoreRevsFile != "" {
-		return nil, errors.New("--ignore-revs-file only applies to history mode; remove --base or the flag")
+		return checkResult{}, errors.New("--ignore-revs-file only applies to history mode; remove --base or the flag")
 	}
 	return runDiffCheck(opts.base)
 }
 
 // runDiffCheck gathers the git data for base...HEAD and detects drift.
-func runDiffCheck(base string) ([]detect.Drift, error) {
+func runDiffCheck(base string) (checkResult, error) {
 	in, err := loadRepoInputs()
 	if err != nil {
-		return nil, err
+		return checkResult{}, err
 	}
 	changes, err := in.git.ChangedFiles(base)
 	if err != nil {
-		return nil, err
+		return checkResult{}, err
 	}
 	// Files removed from the tree (deleted, or renamed away) are no longer
 	// tracked, but sections may still link to them.
-	docs, err := in.resolveDocs(withRemovedPaths(in.tracked, changes))
+	docs, sections, err := in.resolveDocsWithSections(withRemovedPaths(in.tracked, changes))
 	if err != nil {
-		return nil, err
+		return checkResult{}, err
 	}
 	docChanges := map[string][]detect.LineRange{}
 	for _, doc := range docs {
@@ -140,15 +173,23 @@ func runDiffCheck(base string) ([]detect.Drift, error) {
 		}
 		hunks, err := in.git.Hunks(base, change)
 		if err != nil {
-			return nil, err
+			return checkResult{}, err
 		}
 		docChanges[doc.Doc] = lineRanges(hunks)
 	}
 	relevant, err := relevantChanges(in.git, base, relevance.NewFilter(in.cfg.Ignore), relevance.NewAnalyzerSet(relevance.DefaultAnalyzers()...), changes)
 	if err != nil {
-		return nil, err
+		return checkResult{}, err
 	}
-	return detect.Detect(detect.Input{Docs: docs, Changes: detectChanges(relevant), DocChanges: docChanges}), nil
+	drifts := detect.Detect(detect.Input{Docs: docs, Changes: detectChanges(relevant), DocChanges: docChanges})
+	// Severity reads the mapped files of every drifted section, so it sees the
+	// unfiltered change list: a file the relevance filter dropped still holds
+	// (or no longer holds) the referenced names.
+	drifts, err = classifyDrifts(in.git, base, docs, sections, changes, drifts)
+	if err != nil {
+		return checkResult{}, err
+	}
+	return checkResult{drifts: drifts, failOn: in.cfg.Severity.FailOn}, nil
 }
 
 // relevantChanges drops the changes that cannot make documentation stale:

@@ -337,7 +337,7 @@ func TestHistoryTextOutputMatchesDiffMode(t *testing.T) {
 	if code != cli.ExitDrift {
 		t.Fatalf("exit code = %d, want %d", code, cli.ExitDrift)
 	}
-	want := "Usage\n  README.md:3\n  changed code:\n    src/lib.go\n"
+	want := "[low] Usage\n  README.md:3\n  changed code:\n    src/lib.go\n"
 	if out != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", out, want)
 	}
