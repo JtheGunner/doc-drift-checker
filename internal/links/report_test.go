@@ -22,7 +22,7 @@ func sampleReport() links.Report {
 		Doc: "README.md",
 		Sections: []links.SectionLinks{
 			{Heading: "Usage", Anchor: "usage", Level: 2, StartLine: 3, EndLine: 9,
-				Links: []links.Link{{File: "cmd/main.go", Origin: links.OriginAnnotation}},
+				Links:   []links.Link{{File: "cmd/main.go", Origin: links.OriginAnnotation}},
 				Missing: []links.Missing{{Ref: "gone.go", Origin: links.OriginImplicit, Line: 5}}},
 			{Heading: "Intro", Anchor: "intro", Level: 2, StartLine: 10, EndLine: 12,
 				Links: []links.Link{}, Missing: []links.Missing{}, Unmapped: true},

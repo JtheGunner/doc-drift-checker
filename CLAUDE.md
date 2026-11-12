@@ -34,3 +34,9 @@ Go CLI that reports when code changed but the README passage describing it did n
 ## Config
 
 `.docdrift.yaml` in the repo root is loaded by `internal/config` (`Load`, `Parse`, `Defaults`). Keys: `docs`, `ignore`, `mappings`, `mode.default` (`diff` default, or `history`), `severity.fail-on` (`low` default, or `high`). Unknown keys and invalid globs are errors; defaults are documented in the package comment.
+
+## Section-to-code links
+
+`internal/links` maps README sections to tracked files (pure `Resolve`; the `links [--json]` command in `internal/cli` gathers the inputs). Annotate a section with `<!-- drift: glob, glob -->` (comma-separated, `**` supported, matched against tracked files only).
+
+Origins: `annotation`, `config` (`mappings`), `implicit` (file-path and relative-link references). Explicit links replace implicit ones, and a section's own text excludes its child sections.

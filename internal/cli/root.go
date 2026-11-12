@@ -6,7 +6,7 @@ import "github.com/spf13/cobra"
 // NewRootCmd builds the root command. The version is injected by the caller so
 // release builds can set it through linker flags.
 func NewRootCmd(version string) *cobra.Command {
-	return &cobra.Command{
+	root := &cobra.Command{
 		Use:     "doc-drift-checker",
 		Short:   "Report code changes whose README passage did not change",
 		Version: version,
@@ -15,4 +15,6 @@ func NewRootCmd(version string) *cobra.Command {
 			return cmd.Help()
 		},
 	}
+	root.AddCommand(newLinksCmd())
+	return root
 }
