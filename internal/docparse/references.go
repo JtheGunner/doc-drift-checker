@@ -42,7 +42,6 @@ type Reference struct {
 
 var (
 	flagPattern       = regexp.MustCompile(`^--[A-Za-z][A-Za-z0-9-]*`)
-	proseFlagPattern  = regexp.MustCompile(`(?:^|\s)(--[A-Za-z][A-Za-z0-9-]*)`)
 	envDollarPattern  = regexp.MustCompile(`^\$(?:\{([A-Z_][A-Z0-9_]*)\}|([A-Z_][A-Z0-9_]*))$`)
 	envNamePattern    = regexp.MustCompile(`^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$`)
 	envAssignPattern  = regexp.MustCompile(`^([A-Z_][A-Z0-9_]*)=\S*$`)
@@ -62,7 +61,30 @@ var knownExtensions = map[string]bool{
 	".scss": true, ".sql": true, ".mk": true, ".proto": true, ".tf": true,
 }
 
-var knownFileNames = map[string]bool{"Makefile": true, "Dockerfile": true}
+var knownFileNames = map[string]bool{"Makefile": true, "Dockerfile": true, "LICENSE": true}
+
+// collisionExtensions are extensions that product and framework names share
+// (Node.js, Next.js, Socket.io, Pygments.py).
+var collisionExtensions = map[string]bool{
+	".js": true, ".ts": true, ".jsx": true, ".tsx": true,
+	".py": true, ".rs": true, ".rb": true, ".io": true,
+}
+
+// isProductName reports whether a bare name (no directory) with a collision
+// extension reads as a product name rather than a file: its stem starts with
+// an uppercase letter and is not all caps. All-caps stems and lowercase stems
+// such as server.js stay file names. Such names are also not identifiers.
+func isProductName(base string) bool {
+	ext := strings.ToLower(path.Ext(base))
+	if !collisionExtensions[ext] {
+		return false
+	}
+	stem := strings.TrimSuffix(base, path.Ext(base))
+	if stem == "" || stem[0] < 'A' || stem[0] > 'Z' {
+		return false
+	}
+	return strings.ToUpper(stem) != stem
+}
 
 // slashWords are words commonly written as "a/b" in prose; a path made only of
 // them is not a path.
@@ -100,8 +122,6 @@ func ExtractReferences(s Section) []Reference {
 			return ast.WalkSkipChildren, nil
 		case *ast.Link:
 			e.link(v)
-		case *ast.Text:
-			e.proseFlags(v)
 		case *ast.FencedCodeBlock:
 			e.shellBlock(v)
 			return ast.WalkSkipChildren, nil
@@ -169,14 +189,6 @@ func (e *extractor) codeSpan(n *ast.CodeSpan) {
 func isWholeFlag(tok, m string) bool {
 	rest := tok[len(m):]
 	return rest == "" || strings.HasPrefix(rest, "=")
-}
-
-func (e *extractor) proseFlags(n *ast.Text) {
-	seg := n.Segment
-	for _, m := range proseFlagPattern.FindAllSubmatchIndex(seg.Value(e.src), -1) {
-		flag := string(seg.Value(e.src)[m[2]:m[3]])
-		e.add(KindFlag, flag, seg.Start+m[2])
-	}
 }
 
 func (e *extractor) link(n *ast.Link) {
@@ -266,6 +278,9 @@ func filePath(s string) string {
 	}
 	base := segments[len(segments)-1]
 	if knownExtensions[strings.ToLower(path.Ext(base))] || knownFileNames[base] {
+		if len(segments) == 1 && !strings.Contains(s, "/") && isProductName(base) {
+			return ""
+		}
 		return s
 	}
 	if !strings.Contains(s, "/") {
@@ -308,6 +323,9 @@ func isIdentifier(s string) bool {
 	}
 	if strings.HasSuffix(s, "()") {
 		return true
+	}
+	if isProductName(s) {
+		return false
 	}
 	hasLower := strings.ToUpper(s) != s
 	hasUpper := strings.ToLower(s) != s

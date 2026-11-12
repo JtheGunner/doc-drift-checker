@@ -96,13 +96,43 @@ func TestExtractReferences(t *testing.T) {
 			want: nil,
 		},
 		{
-			name: "cli flags in code and prose",
-			src:  "# T\nUse `--verbose` or `--out=dir`, pass --force too; a -- b is a dash and word--word is not a flag.\n",
+			name: "cli flags in inline code",
+			src:  "# T\nUse `--verbose` or `--out=dir`.\n",
 			want: []Reference{
 				{Kind: KindFlag, Value: "--verbose", Line: 2},
 				{Kind: KindFlag, Value: "--out", Line: 2},
-				{Kind: KindFlag, Value: "--force", Line: 2},
 			},
+		},
+		{
+			name: "flags in plain prose are not references",
+			src:  "# T\nPass --force too; a -- b is a dash and word--word is not a flag.\n",
+			want: nil,
+		},
+		{
+			name: "framework names are not file paths",
+			src:  "# T\nBuilt with `Node.js`, `Next.js`, `Vue.js`, `Chart.js`, `Three.js`, `Express.js` and `Socket.io`.\n",
+			want: nil,
+		},
+		{
+			name: "real bare file names stay file paths",
+			src:  "# T\n`README.md` `CHANGELOG.md` `LICENSE` `Makefile` `Dockerfile` `go.mod` `main.go` `config.yaml` `server.js` `.golangci.yml`\n",
+			want: []Reference{
+				{Kind: KindFilePath, Value: "README.md", Line: 2},
+				{Kind: KindFilePath, Value: "CHANGELOG.md", Line: 2},
+				{Kind: KindFilePath, Value: "LICENSE", Line: 2},
+				{Kind: KindFilePath, Value: "Makefile", Line: 2},
+				{Kind: KindFilePath, Value: "Dockerfile", Line: 2},
+				{Kind: KindFilePath, Value: "go.mod", Line: 2},
+				{Kind: KindFilePath, Value: "main.go", Line: 2},
+				{Kind: KindFilePath, Value: "config.yaml", Line: 2},
+				{Kind: KindFilePath, Value: "server.js", Line: 2},
+				{Kind: KindFilePath, Value: ".golangci.yml", Line: 2},
+			},
+		},
+		{
+			name: "capitalized file inside a directory stays a file path",
+			src:  "# T\n`web/Button.tsx`\n",
+			want: []Reference{{Kind: KindFilePath, Value: "web/Button.tsx", Line: 2}},
 		},
 		{
 			name: "flag inside multi-word inline command",
