@@ -446,6 +446,7 @@ type ciWorkflow struct {
 	Permissions map[string]string `yaml:"permissions"`
 	Jobs        map[string]struct {
 		RunsOn   string `yaml:"runs-on"`
+		If       string `yaml:"if"`
 		Strategy struct {
 			Matrix map[string][]string `yaml:"matrix"`
 		} `yaml:"strategy"`
@@ -460,8 +461,8 @@ func TestCIWorkflow(t *testing.T) {
 	if len(w.Permissions) != 1 || w.Permissions["contents"] != "read" {
 		t.Errorf("permissions = %v, want contents: read only", w.Permissions)
 	}
-	if len(w.Jobs) != 2 {
-		t.Fatalf("jobs = %d, want lint and test", len(w.Jobs))
+	if len(w.Jobs) != 3 {
+		t.Fatalf("jobs = %d, want lint, test and docs-drift", len(w.Jobs))
 	}
 
 	lint, ok := w.Jobs["lint"]
@@ -500,5 +501,43 @@ func TestCIWorkflow(t *testing.T) {
 	}
 	if !sawRace {
 		t.Error("test job needs a `go test -race ./...` step")
+	}
+
+	docs, ok := w.Jobs["docs-drift"]
+	if !ok {
+		t.Fatal("docs-drift job missing")
+	}
+	if docs.RunsOn != "ubuntu-latest" || len(docs.Strategy.Matrix) != 0 {
+		t.Errorf("docs-drift must run on ubuntu-latest only, without a matrix: %+v", docs)
+	}
+	if docs.If != "github.event_name == 'pull_request'" {
+		t.Errorf("docs-drift if = %q, want pull requests only", docs.If)
+	}
+	var fullHistory, sawCheck bool
+	for _, step := range docs.Steps {
+		if strings.Contains(step.Run, "${{") {
+			t.Errorf("expression inside run block:\n%s", step.Run)
+		}
+		if strings.HasPrefix(step.Uses, "actions/checkout@") && step.With["fetch-depth"] == "0" {
+			fullHistory = true
+		}
+		if !strings.Contains(step.Run, " check ") {
+			continue
+		}
+		sawCheck = true
+		if step.Env["BASE_REF"] != "${{ github.base_ref }}" {
+			t.Errorf("BASE_REF env = %q, want ${{ github.base_ref }}", step.Env["BASE_REF"])
+		}
+		for _, want := range []string{`--base "origin/${BASE_REF}"`, "--format github", "--warn-only"} {
+			if !strings.Contains(step.Run, want) {
+				t.Errorf("check step lacks %s:\n%s", want, step.Run)
+			}
+		}
+	}
+	if !fullHistory {
+		t.Error("docs-drift needs a checkout with fetch-depth: 0")
+	}
+	if !sawCheck {
+		t.Error("docs-drift needs a `check` step")
 	}
 }

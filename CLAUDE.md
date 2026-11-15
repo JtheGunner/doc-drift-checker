@@ -59,7 +59,9 @@ Exit codes: 0 no drift, 1 drift, 2 usage/runtime error (`cli.ExitCode`, handled 
 
 CI integrations at the repo root: `action.yml` (composite action: validates inputs, `go install`, fetches `origin/<base>`, runs `check --base origin/<base> --format ...`; every `${{ }}` value reaches the shell through `env:` only) and `.pre-commit-hooks.yaml` (hook `doc-drift-checker`, pre-push, runs history mode unless `args: ["--base", ...]` is given). `ci_files_test.go` pins their structure (no `${{` in `run:` blocks). Usage examples live in `docs/ci-integration.md`; keep them in sync with the action inputs.
 
-`.github/workflows/ci.yml`: `lint` (ubuntu-latest only) and `test` (matrix `os`: ubuntu-latest, macos-latest; runs `go test -race ./...`), `permissions: contents: read`. Check names are `lint` and `test (ubuntu-latest)` / `test (macos-latest)`; `TestCIWorkflow` pins the structure.
+`.github/workflows/ci.yml`: `lint` (ubuntu-latest only), `test` (matrix `os`: ubuntu-latest, macos-latest; runs `go test -race ./...`) and `docs-drift` (pull requests only; dogfooding: builds the tool from the checkout, `fetch-depth: 0`, runs `check --base origin/$BASE_REF --format github --warn-only`, base passed via `env:`), `permissions: contents: read`. Check names are `lint`, `docs-drift` and `test (ubuntu-latest)` / `test (macos-latest)`; `TestCIWorkflow` pins the structure. `docs-drift` stays `--warn-only` until the config has proven stable.
+
+`.docdrift.yaml` in this repo is the dogfooding config (`docs`: `README.md`, `docs/*.md`; defaults otherwise, links come from implicit path references). `check --base origin/main` must report no drift on an unchanged branch.
 
 ## Release
 
