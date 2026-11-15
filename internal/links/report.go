@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strings"
-	"unicode"
 
 	pathglob "github.com/JtheGunner/doc-drift-checker/internal/glob"
+	"github.com/JtheGunner/doc-drift-checker/internal/textsafe"
 )
 
 // Report is the resolved mapping of all documentation files. It is the
@@ -100,26 +99,7 @@ const maxTextLine = 200
 
 // clean neutralises untrusted text for the terminal: invalid UTF-8 becomes
 // U+FFFD, control and format characters become \xNN or \uNNNN escapes, and the
-// result is cut to maxTextLine characters. It mirrors report.clean, which links
-// cannot import (report depends on links).
+// result is cut to maxTextLine characters (see textsafe.Escape).
 func clean(s string) string {
-	s = strings.ToValidUTF8(s, "\uFFFD")
-	var b strings.Builder
-	count := 0
-	for _, r := range s {
-		if count == maxTextLine {
-			b.WriteString("...")
-			break
-		}
-		count++
-		switch {
-		case r < 0x100 && unicode.IsControl(r):
-			fmt.Fprintf(&b, "\\x%02x", r)
-		case unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r == '\u2028' || r == '\u2029':
-			fmt.Fprintf(&b, "\\u%04x", r)
-		default:
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
+	return textsafe.Escape(s, maxTextLine)
 }
