@@ -9,6 +9,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Changed
 
 - `check` and `explain` apply `mode.default` when `--base` is not given: `history` runs history mode, `diff` is a usage error asking for `--base`. An unset key behaves as before (history mode). `--base` always selects diff mode.
+- `init` lists sections that link more than 10 files as skipped, with the reason and a count in the summary line, instead of omitting them silently. Nothing is written for them.
+- `ack` writes `doc-drift.lock` through the same atomic write path as `init`. A new lockfile still gets mode `0644`; an existing one keeps its permission bits.
+
+### Fixed
+
+- The text output of `check` and `links` escapes control characters in repository-provided values (paths, headings, references) and caps their length, as `explain`, SARIF and GitHub output already did.
 
 ## [0.1.0] - 2026-11-15
 
