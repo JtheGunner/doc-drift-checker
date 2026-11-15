@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/JtheGunner/doc-drift-checker/internal/cli"
@@ -442,4 +443,66 @@ func TestInitRejectsArguments(t *testing.T) {
 	initRepo(t, initReadme)
 
 	initFails(t, "extra")
+}
+
+// TestInitAbortsOnSymlinkOrNonRegularDoc pins the fail-closed behaviour: a
+// tracked doc that is a symlink or no longer a regular file aborts init with
+// exit 2, with and without --write, and nothing is written (not the config).
+func TestInitAbortsOnSymlinkOrNonRegularDoc(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(t *testing.T, r *testutil.Repo)
+	}{
+		{"committed symlink", func(t *testing.T, r *testutil.Repo) {
+			if err := os.Remove(filepath.Join(r.Dir, "README.md")); err != nil {
+				t.Fatal(err)
+			}
+			r.Write("other.md", initReadme)
+			if err := os.Symlink("other.md", filepath.Join(r.Dir, "README.md")); err != nil {
+				t.Skipf("symlinks unavailable: %v", err)
+			}
+			r.Commit("doc becomes a symlink")
+		}},
+		{"tracked doc replaced by a FIFO", func(t *testing.T, r *testutil.Repo) {
+			path := filepath.Join(r.Dir, "README.md")
+			if err := os.Remove(path); err != nil {
+				t.Fatal(err)
+			}
+			if err := syscall.Mkfifo(path, 0o644); err != nil {
+				t.Skipf("fifo unavailable: %v", err)
+			}
+		}},
+		{"tracked doc replaced by a directory", func(t *testing.T, r *testutil.Repo) {
+			path := filepath.Join(r.Dir, "README.md")
+			if err := os.Remove(path); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(path, 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	}
+	for _, tc := range cases {
+		for _, args := range [][]string{nil, {"--write"}} {
+			t.Run(tc.name+" "+strings.Join(args, " "), func(t *testing.T) {
+				r := initRepo(t, initReadme)
+				tc.mutate(t, r)
+				before := r.Git("status", "--porcelain")
+
+				initFails(t, args...)
+
+				if _, err := os.Lstat(filepath.Join(r.Dir, config.FileName)); err == nil {
+					t.Error("config was written although init aborted")
+				}
+				if got := r.Git("status", "--porcelain"); got != before {
+					t.Errorf("working tree changed:\nbefore %q\nafter  %q", before, got)
+				}
+				if tc.name == "committed symlink" {
+					if got := readRepoFile(t, r, "other.md"); got != initReadme {
+						t.Error("symlink target was modified")
+					}
+				}
+			})
+		}
+	}
 }

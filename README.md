@@ -210,7 +210,7 @@ Files:
 doc-drift-checker init [--write] [--force]
 ```
 
-Writes a starter `.docdrift.yaml` (all values are the built-in defaults, examples are commented out) and suggests `<!-- drift: ... -->` annotations for sections whose implicit links are strong: all links are implicit and the section links 1 to 10 tracked files. Sections with more files, or with file names that cannot be written safely, are listed as skipped with the reason. Suggestions are only printed unless `--write` is given; `--write` inserts each one as its own line directly after the section's heading and refuses a documentation file with uncommitted changes. An existing `.docdrift.yaml` is not replaced unless `--force` is given. Exit code `0` on success, `2` on error.
+Writes a starter `.docdrift.yaml` (all values are the built-in defaults, examples are commented out) and suggests `<!-- drift: ... -->` annotations for sections whose implicit links are strong: all links are implicit and the section links 1 to 10 tracked files. Sections with more files, or with file names that cannot be written safely, are listed as skipped with the reason. Suggestions are only printed unless `--write` is given; `--write` inserts each one as its own line directly after the section's heading and refuses a documentation file with uncommitted changes. An existing `.docdrift.yaml` is not replaced unless `--force` is given. A documentation file that is a symlink or not a regular file aborts `init` (exit `2`) before anything is written, with or without `--write`; replace it with a regular file first. Exit code `0` on success, `2` on error.
 
 ```text
 wrote .docdrift.yaml
