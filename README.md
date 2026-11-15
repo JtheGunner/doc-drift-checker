@@ -51,7 +51,7 @@ Sections are linked to code in three ways, see [Linking sections to code](#-link
 
 Pick one.
 
-**With Go** (a recent Go toolchain is required):
+**With Go** (Go 1.25 or newer is required):
 
 ```sh
 go install github.com/JtheGunner/doc-drift-checker/cmd/doc-drift-checker@latest
