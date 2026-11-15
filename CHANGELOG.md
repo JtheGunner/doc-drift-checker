@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). The release date is filled in when the version tag is created.
 
+## [Unreleased]
+
+### Changed
+
+- `check` and `explain` apply `mode.default` when `--base` is not given: `history` runs history mode, `diff` is a usage error asking for `--base`. An unset key behaves as before (history mode). `--base` always selects diff mode.
+
 ## [0.1.0] - 2026-11-15
 
 First release.

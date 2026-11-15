@@ -142,7 +142,7 @@ doc-drift-checker check [--base <ref>] [--format text|json|sarif|github] \
 
 | Flag | Meaning |
 | --- | --- |
-| `--base <ref>` | Diff mode: compare `<ref>...HEAD`. Without it, history mode runs. |
+| `--base <ref>` | Diff mode: compare `<ref>...HEAD`. Wins over `mode.default`. Without it, `mode.default` decides (history mode unless it is set to `diff`, which is a usage error). |
 | `--format` | `text` (default), `json`, `sarif` (SARIF 2.1.0 for code scanning) or `github` (workflow annotations). |
 | `--min-severity` | Lowest severity that exits `1`: `low` or `high`. Default: `severity.fail-on` from the config, else `low`. All drifts are printed regardless. |
 | `--warn-only` | Exit `0` even when drift is found. Errors still exit `2`. |
@@ -272,7 +272,7 @@ mappings:
     - "cmd/**"
 
 mode:
-  default: diff        # reserved, see below
+  default: history     # mode without --base: history, or diff (needs --base)
 
 severity:
   fail-on: low         # low (default) or high
@@ -283,7 +283,7 @@ severity:
 | `docs` | `["README.md"]` | Documentation files to check. |
 | `ignore` | tests, generated code, lockfiles and vendored code | Globs of paths whose changes never cause drift. |
 | `mappings` | none | Section-to-code links by heading text or anchor. |
-| `mode.default` | `diff` | `diff` or `history`. **Reserved:** `check` does not apply it yet. The mode is chosen only by the presence of `--base` (diff mode with it, history mode without). |
+| `mode.default` | `diff` (see below) | `diff` or `history`: the mode of `check` and `explain` when `--base` is not given. `--base` always selects diff mode. Left unset, a run without `--base` uses history mode. Set to `diff`, a run without `--base` is a usage error (exit `2`). |
 | `severity.fail-on` | `low` | Lowest severity that makes `check` exit `1`. The `--min-severity` flag wins. |
 
 > [!IMPORTANT]
@@ -360,7 +360,6 @@ Details, inputs, the SARIF upload and the pre-commit hook are in [docs/ci-integr
 - **Symbol analysis** exists for Go only, and only in diff mode. It does not type-check: a change of an unexported declaration that an exported constant, variable or type refers to is not detected. Very long constant chains and files above 8 MiB are always reported as changed.
 - **Broken references** are matched literally on whole tokens. A removed flag that is still mentioned in a code comment is not detected, a flag moved to a file the section is not linked to reads as broken, and mapped files above 4 MiB are never claimed to be broken.
 - **Lockfile** comparison cannot apply whitespace or symbol relevance; the mapped files must match exactly.
-- **Config:** `mode.default` is reserved and not applied yet.
 - `init` suggests annotations only for sections with 1 to 10 implicitly linked files and only for the default `docs` glob (`README.md`).
 
 ---

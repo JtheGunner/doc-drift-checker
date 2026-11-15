@@ -41,6 +41,9 @@ func newCheckCmd() *cobra.Command {
 			"bodies, comments, imports and unexported code are ignored, and a file that does not " +
 			"parse counts as changed. Renames are never dropped, and other languages fall back to " +
 			"path-based relevance. This symbol check applies to diff mode only.\n\n" +
+			"Mode selection: --base always selects diff mode. Without it, mode.default from " +
+			".docdrift.yaml decides: history (or the key unset) runs history mode; diff is a usage " +
+			"error (exit 2) that asks for --base.\n\n" +
 			"History mode (no --base): needs no base branch, which suits local checks. A section " +
 			"drifts when the newest commit of a linked code file is strictly newer than the " +
 			"newest commit blamed for the section's own lines (git blame, child sections " +
@@ -111,7 +114,7 @@ func newCheckCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&base, "base", "", "base reference to compare against (diff mode); without it history mode runs")
+	cmd.Flags().StringVar(&base, "base", "", "base reference to compare against (diff mode); without it mode.default decides (history mode unless set to diff, which is an error)")
 	cmd.Flags().StringVar(&format, "format", formatText, "output format: text, json, sarif (SARIF 2.1.0) or github (GitHub Actions annotations)")
 	cmd.Flags().StringVar(&ignoreRevsFile, "ignore-revs-file", "", "history mode only: file of commit hashes to skip when dating (formatting commits)")
 	cmd.Flags().StringVar(&minSeverity, "min-severity", string(config.SeverityLow), "lowest severity that makes the exit code 1: low or high (default: severity.fail-on in .docdrift.yaml, else low)")

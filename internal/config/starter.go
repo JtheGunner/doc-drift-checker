@@ -9,7 +9,8 @@ import (
 // command. Every active value equals Defaults, so parsing it yields the same
 // configuration as having no file; the ignore list is generated from
 // DefaultIgnore and cannot drift from it. The mappings example stays commented
-// out because it must name real headings and files.
+// out because it must name real headings and files; so does mode.default,
+// because setting it explicitly changes how check runs without --base.
 func Starter() []byte {
 	var b strings.Builder
 	b.WriteString(starterHead)
@@ -43,10 +44,11 @@ const starterTail = `
 #   "#configuration":
 #     - "internal/config/**"
 
-# Detection mode. Reserved: the check command does not apply this key yet;
-# without --base it runs history mode, with --base diff mode.
-mode:
-  default: diff
+# Detection mode of check and explain when --base is not given. Unset, they run
+# history mode. "history" does the same explicitly; "diff" makes a run without
+# --base a usage error (pass --base <ref>). --base always selects diff mode.
+# mode:
+#   default: history
 
 severity:
   # Lowest severity that makes check exit 1: low or high.

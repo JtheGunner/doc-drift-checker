@@ -31,10 +31,19 @@ type evalResult struct {
 }
 
 // evaluate validates the mode flags and evaluates every section of every
-// configured document: diff mode when diffMode is set, history mode otherwise.
-// It is the only place where check and explain decide anything.
+// configured document: diff mode when diffMode (--base) is set, history mode
+// otherwise. Without --base, an explicit mode.default: diff is a usage error;
+// an unset key or history runs history mode. It is the only place where check
+// and explain decide anything.
 func evaluate(opts evalOptions) (evalResult, error) {
 	if !opts.diffMode {
+		cfg, err := loadRepoConfig()
+		if err != nil {
+			return evalResult{}, err
+		}
+		if cfg.Mode.DefaultSet && cfg.Mode.Default == config.ModeDiff {
+			return evalResult{}, errors.New("mode.default is diff in " + config.FileName + ": pass --base <ref>, or set mode.default to history")
+		}
 		return evaluateHistory(opts.ignoreRevsFile, opts.section)
 	}
 	if opts.base == "" {

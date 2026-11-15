@@ -29,8 +29,8 @@ func newExplainCmd() *cobra.Command {
 			"and the verdict with its reason, severity and broken references.\n\n" +
 			"<section> is the section key <doc path>#<anchor> (e.g. README.md#installation), or just " +
 			"the anchor (with or without #) when it is unique across all configured docs; the same " +
-			"resolution as ack. Without --base the history mode of check runs, with --base <ref> the " +
-			"diff mode; --ignore-revs-file is history mode only. Only paths, hashes, subjects and " +
+			"resolution as ack. Mode selection is that of check: --base <ref> runs diff mode, without " +
+			"it mode.default decides (history mode unless set to diff, which is a usage error); --ignore-revs-file is history mode only. Only paths, hashes, subjects and " +
 			"dates are printed, never file contents; control characters in them are neutralised in " +
 			"the text output.\n\n" +
 			"Exit codes: 0 the explanation was written (whether or not the section drifts), 2 usage or " +
@@ -51,7 +51,7 @@ func newExplainCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&base, "base", "", "base reference to compare against (diff mode); without it history mode runs")
+	cmd.Flags().StringVar(&base, "base", "", "base reference to compare against (diff mode); without it mode.default decides (history mode unless set to diff, which is an error)")
 	cmd.Flags().StringVar(&format, "format", formatText, "output format: text or json")
 	cmd.Flags().StringVar(&ignoreRevsFile, "ignore-revs-file", "", "history mode only: file of commit hashes to skip when dating (formatting commits)")
 	return cmd

@@ -26,7 +26,7 @@ func TestStarterIsDeterministicAndCommented(t *testing.T) {
 	if !strings.HasSuffix(first, "\n") || strings.Contains(first, "\r") {
 		t.Error("Starter() must be LF-terminated without CR")
 	}
-	for _, key := range []string{"docs:", "ignore:", "mappings:", "mode:", "default: diff", "severity:", "fail-on: low"} {
+	for _, key := range []string{"docs:", "ignore:", "mappings:", "mode:", "default: history", "severity:", "fail-on: low"} {
 		if !strings.Contains(first, key) {
 			t.Errorf("Starter() lacks %q", key)
 		}
