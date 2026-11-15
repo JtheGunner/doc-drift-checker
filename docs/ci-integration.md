@@ -21,6 +21,10 @@ All examples need the full git history, because `check --base` compares `base...
 
 Exit codes are the same for every format: `0` no drift, `1` drift, `2` usage or runtime error. `--min-severity high` makes only high severity drift fail the run, and `--warn-only` forces exit `0` on drift.
 
+## Getting started
+
+Introduce the check without blocking merges: report drift but never fail the job (`--warn-only`, exit `0`). Once the output is quiet, fail only on high severity (`--min-severity high`, or the `min-severity` action input), then move to the default. The action has no warn-only input, so start with the [plain workflow](#without-the-action) and `--warn-only`. See "Choosing good mappings" in the README for keeping mappings narrow.
+
 ## GitHub Action
 
 The action installs the binary with `go install` and runs `check --base origin/<base> --format <format>` in your repository. The job fails when drift is found (exit `1`) or the check cannot run (exit `2`).

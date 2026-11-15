@@ -293,6 +293,33 @@ severity:
 
 ---
 
+## 🎯 Choosing good mappings
+
+A section without links is `unmapped`: nothing ties it to code, so it can never drift. Map each section to the file that **defines** what it describes, not to a whole package. A broad mapping reports drift on every unrelated edit, and a frequently changed file (a central `run.go`, say) does the same.
+
+- Key `mappings` by the full heading text, emoji included (`"🚩 Flags"`), or by `#` plus the anchor (`"#-flags"`). `Flags` alone matches nothing; `doc-drift-checker links` shows such keys as `unmatched mapping`.
+- Map the flag section to the file that registers the flags, not to `cmd/**`.
+- Start gently: run `check --warn-only` (exit `0` on drift), then `--min-severity high` (only broken references fail), then tighten.
+- Add `CHANGELOG.md` and `LICENSE` to `ignore`. A present `ignore` **replaces** the built-in list, so repeat the defaults (`doc-drift-checker init` writes them) or drop them knowingly.
+
+```yaml
+# .docdrift.yaml for a CLI called "mytool"
+docs: ["README.md"]
+ignore:
+  - "**/*_test.go"
+  - "**/testdata/**"
+  - "**/vendor/**"
+  - "CHANGELOG.md"
+  - "LICENSE"
+mappings:
+  "🚩 Flags":
+    - "cmd/mytool/flags.go"
+  "#-configuration":
+    - "internal/config/config.go"
+```
+
+---
+
 ## 🚦 Severity and broken references
 
 Every drift is `low` or `high`. Severity never adds or removes a drift; it only controls which drifts fail the run (`--min-severity`, `severity.fail-on`).
