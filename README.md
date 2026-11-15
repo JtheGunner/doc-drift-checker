@@ -314,8 +314,8 @@ ignore:
 mappings:
   "🚩 Flags":
     - "cmd/mytool/flags.go"
-  "#-configuration":
-    - "internal/config/config.go"
+  "#-exit-codes":
+    - "cmd/mytool/exit.go"
 ```
 
 ---
