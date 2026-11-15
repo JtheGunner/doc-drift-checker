@@ -27,14 +27,18 @@ import (
 //	        }
 //	      ]
 //	    }
-//	  ]
+//	  ],
+//	  "unmatchedMappings": [{"ref": "Flags", "origin": "config"}]
 //	}
 //
 // origin is one of "annotation", "config", "implicit". Docs are sorted by
 // path, sections keep document order, links are sorted by file and missing
-// entries by ref. Arrays are never null.
+// entries by ref. unmatchedMappings lists the mappings keys that name no
+// section of any doc (a key is the full heading text including emoji, or
+// "#anchor"), sorted by key, always with origin "config". Arrays are never null.
 type Report struct {
-	Docs []DocLinks `json:"docs"`
+	Docs              []DocLinks `json:"docs"`
+	UnmatchedMappings []Missing  `json:"unmatchedMappings"`
 }
 
 // MatchDocs returns the tracked files matching any of the docs globs, sorted.
@@ -82,6 +86,11 @@ func WriteText(w io.Writer, r Report) error {
 					return err
 				}
 			}
+		}
+	}
+	for _, m := range r.UnmatchedMappings {
+		if _, err := fmt.Fprintf(w, "unmatched mapping: %s [%s]\n", clean(m.Ref), m.Origin); err != nil {
+			return err
 		}
 	}
 	return nil

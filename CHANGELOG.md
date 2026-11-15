@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- `links` reports `mappings` keys that match no section (`unmatched mapping:` in text, `unmatchedMappings` in JSON). `check` and `explain` are unchanged.
+
 ## [0.2.2] - 2026-11-15
 
 ### Changed

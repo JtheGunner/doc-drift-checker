@@ -3,6 +3,7 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/JtheGunner/doc-drift-checker/internal/docparse"
 	"github.com/JtheGunner/doc-drift-checker/internal/links"
 )
 
@@ -13,7 +14,8 @@ func newLinksCmd() *cobra.Command {
 		Short: "Show which code files each documentation section describes",
 		Long: "Show the mapping of documentation sections to tracked code files, " +
 			"with the origin of each link (annotation, config, implicit), " +
-			"references that match no tracked file, and unmapped sections.",
+			"references that match no tracked file, mappings keys that match no section, " +
+			"and unmapped sections.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			report, err := buildLinksReport()
@@ -36,9 +38,13 @@ func buildLinksReport() (links.Report, error) {
 	if err != nil {
 		return links.Report{}, err
 	}
-	docs, err := in.resolveDocs(in.tracked)
+	docs, parsed, err := in.resolveDocsWithSections(in.tracked)
 	if err != nil {
 		return links.Report{}, err
 	}
-	return links.Report{Docs: docs}, nil
+	sections := make([][]docparse.Section, 0, len(parsed))
+	for _, s := range parsed {
+		sections = append(sections, s)
+	}
+	return links.Report{Docs: docs, UnmatchedMappings: links.UnmatchedMappings(in.cfg, sections)}, nil
 }
