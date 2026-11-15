@@ -36,9 +36,10 @@ func newInitCmd() *cobra.Command {
 			"A section is strongly linked when all its links are implicit (file paths and " +
 			"relative links in its text) and it links 1 to " + fmt.Sprint(links.MaxSuggestedFiles) +
 			" tracked files. The suggestion is the annotation \"<!-- drift: path, path -->\" " +
-			"listing those files. Sections with explicit links, no links or more files are not " +
-			"suggested, and neither are sections with file names that cannot be written safely " +
-			"(glob characters, commas, comment markers, control characters).\n\n" +
+			"listing those files. Sections with explicit links or no links are not suggested. " +
+			"Sections with more files, or with file names that cannot be written safely " +
+			"(glob characters, commas, comment markers, control characters), are listed as " +
+			"skipped with the reason and counted in the summary line.\n\n" +
 			"Suggestions are only printed. With --write each one is inserted as its own line " +
 			"directly after its heading in the documentation file (after the underline of an " +
 			"underlined heading). --write refuses a documentation file with uncommitted changes, " +
@@ -204,7 +205,7 @@ func prepareWrites(git *gitx.Client, plans []*docPlan) error {
 // printPlans reports the suggestions per document. With write set, the ones in
 // applied are reported as written.
 func printPlans(w io.Writer, plans []*docPlan, write bool) error {
-	suggested, written := 0, 0
+	suggested, written, skipped := 0, 0, 0
 	for _, p := range plans {
 		if len(p.suggestions) == 0 && len(p.skipped) == 0 {
 			continue
@@ -224,16 +225,21 @@ func printPlans(w io.Writer, plans []*docPlan, write bool) error {
 		}
 		suggested += len(p.suggestions)
 		written += len(p.applied)
+		skipped += len(p.skipped)
+	}
+	note := ""
+	if skipped > 0 {
+		note = fmt.Sprintf(", %d section(s) skipped", skipped)
 	}
 	switch {
 	case suggested == 0:
-		_, err := fmt.Fprintln(w, "no annotation suggestions")
+		_, err := fmt.Fprintf(w, "no annotation suggestions%s\n", note)
 		return err
 	case !write:
-		_, err := fmt.Fprintf(w, "%d annotation suggestion(s), not written (run init --write to insert them)\n", suggested)
+		_, err := fmt.Fprintf(w, "%d annotation suggestion(s)%s, not written (run init --write to insert them)\n", suggested, note)
 		return err
 	}
-	_, err := fmt.Fprintf(w, "%d annotation suggestion(s), %d written\n", suggested, written)
+	_, err := fmt.Fprintf(w, "%d annotation suggestion(s)%s, %d written\n", suggested, note, written)
 	return err
 }
 

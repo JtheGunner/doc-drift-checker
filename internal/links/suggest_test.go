@@ -38,7 +38,7 @@ func TestSuggest(t *testing.T) {
 		{"single implicit", implicitSection("A", map[string]links.Origin{"src/a.go": implicit}), []string{"src/a.go"}, false},
 		{"sorted", implicitSection("A", map[string]links.Origin{"src/b.go": implicit, "src/a.go": implicit}), []string{"src/a.go", "src/b.go"}, false},
 		{"exactly ten", implicitSection("A", ten), sortedKeys(ten), false},
-		{"eleven is too broad", implicitSection("A", many), nil, false},
+		{"eleven is skipped", implicitSection("A", many), nil, true},
 		{"no links", implicitSection("A", nil), nil, false},
 		{"annotation link", implicitSection("A", map[string]links.Origin{"src/a.go": links.OriginAnnotation}), nil, false},
 		{"config link", implicitSection("A", map[string]links.Origin{"src/a.go": links.OriginConfig}), nil, false},

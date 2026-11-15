@@ -341,11 +341,31 @@ func TestInitDoesNotSuggestTooBroadSections(t *testing.T) {
 
 	out := mustInit(t, "--write")
 
-	if !strings.Contains(out, "no annotation suggestions") {
-		t.Errorf("output:\n%s", out)
+	for _, want := range []string{"line 1  Many", "skipped: links 11 files, more than the 10 allowed", "no annotation suggestions, 1 section(s) skipped"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
 	}
 	if got := readRepoFile(t, r, "README.md"); got != readme {
 		t.Error("README changed")
+	}
+}
+
+func TestInitSuggestsSectionWithExactlyTenFiles(t *testing.T) {
+	var refs []string
+	r := testutil.NewRepo(t)
+	for _, n := range []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"} {
+		r.Write("src/"+n+".go", "package src\n")
+		refs = append(refs, "`src/"+n+".go`")
+	}
+	r.Write("README.md", "## Ten\n\nSee "+strings.Join(refs, ", ")+".\n")
+	r.Commit("base")
+	t.Chdir(r.Dir)
+
+	out := mustInit(t)
+
+	if strings.Contains(out, "skipped") || !strings.Contains(out, "1 annotation suggestion(s), not written") {
+		t.Errorf("output:\n%s", out)
 	}
 }
 
