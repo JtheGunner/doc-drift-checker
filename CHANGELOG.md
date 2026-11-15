@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-15
+
+### Changed
+
+- The neutralisation of control characters in repository-provided text now has one implementation (`internal/textsafe`) shared by the `check`, `links`, `explain` and `init` output instead of three copies. Output is unchanged.
+- The test for `init` refusing a FIFO as a documentation file lives in a unix-only test file, so the `internal/cli` tests compile on Windows. No change for users.
+
 ## [0.2.0] - 2026-11-15
 
 ### Changed
