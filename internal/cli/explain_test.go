@@ -334,6 +334,11 @@ func TestExplainAgreesWithCheck(t *testing.T) {
 			r.CommitFile("src/lib.go", newLib, "change code")
 			r.CommitFile("README.md", editUsage(checkReadme), "docs updated")
 		}},
+		{"history: mode.default history", false, func(t *testing.T) {
+			r := historyRepo(t)
+			r.CommitFile(".docdrift.yaml", "mode:\n  default: history\n", "config")
+			r.CommitFile("src/lib.go", newLib, "change code")
+		}},
 		{"history: equal dates", false, func(t *testing.T) {
 			historyRepo(t)
 		}},

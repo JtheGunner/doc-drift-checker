@@ -5,7 +5,7 @@
 //	docs:             ["README.md"]
 //	ignore:           see "Default ignore globs" below
 //	mappings:         {}
-//	mode.default:     "diff"
+//	mode.default:     "diff" (check applies it only when the file sets it, see Mode)
 //	severity.fail-on: "low"
 //
 // # Default ignore globs
@@ -67,6 +67,10 @@ const (
 type Mode struct {
 	// Default is the mode used when no mode is requested explicitly.
 	Default ModeName `yaml:"default"`
+	// DefaultSet reports whether the file sets mode.default explicitly. An
+	// unset key keeps the documented default (diff) but must not change how
+	// check runs without --base, so callers read it to tell the two apart.
+	DefaultSet bool `yaml:"-"`
 }
 
 // Severity holds the severity settings.
@@ -141,7 +145,22 @@ func Parse(data []byte, name string) (Config, error) {
 	if err := validate(cfg); err != nil {
 		return Config{}, fmt.Errorf("%s: %w", name, err)
 	}
+	cfg.Mode.DefaultSet = modeDefaultPresent(data)
 	return cfg, nil
+}
+
+// modeDefaultPresent reports whether data sets mode.default to a value. The
+// data was already decoded and validated, so a decode error cannot happen here.
+func modeDefaultPresent(data []byte) bool {
+	var probe struct {
+		Mode struct {
+			Default *ModeName `yaml:"default"`
+		} `yaml:"mode"`
+	}
+	if err := yaml.Unmarshal(data, &probe); err != nil {
+		return false
+	}
+	return probe.Mode.Default != nil
 }
 
 func validate(cfg Config) error {

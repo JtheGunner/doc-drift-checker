@@ -69,3 +69,17 @@ func (in repoInputs) resolveDocsWithSections(files []string) ([]links.DocLinks, 
 	}
 	return docs, parsed, nil
 }
+
+// loadRepoConfig loads the config of the repository containing the working
+// directory, without gathering anything else.
+func loadRepoConfig() (config.Config, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return config.Config{}, fmt.Errorf("get working directory: %w", err)
+	}
+	root, err := gitx.New(wd).Root()
+	if err != nil {
+		return config.Config{}, fmt.Errorf("find repository root: %w", err)
+	}
+	return config.Load(root)
+}

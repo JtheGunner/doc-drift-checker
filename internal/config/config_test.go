@@ -53,7 +53,7 @@ severity:
 					"Installation": {"cmd/**", "go.mod"},
 					"#usage":       {"internal/cli/*.go"},
 				},
-				Mode:     Mode{Default: ModeHistory},
+				Mode:     Mode{Default: ModeHistory, DefaultSet: true},
 				Severity: Severity{FailOn: SeverityHigh},
 			},
 		},
@@ -246,6 +246,32 @@ func TestLoadRejectsSymlink(t *testing.T) {
 			_, err := Load(dir)
 			if err == nil || !strings.Contains(err.Error(), link) || !strings.Contains(err.Error(), "regular file") {
 				t.Errorf("error %v should name %q and mention a regular file", err, link)
+			}
+		})
+	}
+}
+
+func TestParseModeDefaultSet(t *testing.T) {
+	tests := []struct {
+		name     string
+		data     string
+		wantMode ModeName
+		wantSet  bool
+	}{
+		{"empty file", "", ModeDiff, false},
+		{"other keys only", "docs: [README.md]\n", ModeDiff, false},
+		{"mode block without default", "mode: {}\n", ModeDiff, false},
+		{"explicit diff", "mode:\n  default: diff\n", ModeDiff, true},
+		{"explicit history", "mode:\n  default: history\n", ModeHistory, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := Parse([]byte(tt.data), FileName)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Mode.Default != tt.wantMode || cfg.Mode.DefaultSet != tt.wantSet {
+				t.Errorf("Mode = %+v, want default %q set %v", cfg.Mode, tt.wantMode, tt.wantSet)
 			}
 		})
 	}
