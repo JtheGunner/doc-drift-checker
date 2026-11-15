@@ -59,6 +59,8 @@ Exit codes: 0 no drift, 1 drift, 2 usage/runtime error (`cli.ExitCode`, handled 
 
 CI integrations at the repo root: `action.yml` (composite action: validates inputs, `go install`, fetches `origin/<base>`, runs `check --base origin/<base> --format ...`; every `${{ }}` value reaches the shell through `env:` only) and `.pre-commit-hooks.yaml` (hook `doc-drift-checker`, pre-push, runs history mode unless `args: ["--base", ...]` is given). `ci_files_test.go` pins their structure (no `${{` in `run:` blocks). Usage examples live in `docs/ci-integration.md`; keep them in sync with the action inputs.
 
+`.github/workflows/ci.yml`: `lint` (ubuntu-latest only) and `test` (matrix `os`: ubuntu-latest, macos-latest; runs `go test -race ./...`), `permissions: contents: read`. Check names are `lint` and `test (ubuntu-latest)` / `test (macos-latest)`; `TestCIWorkflow` pins the structure.
+
 ## Release
 
 `.goreleaser.yaml` (v2: darwin/linux x amd64/arm64, `CGO_ENABLED=0`, `-X main.version={{.Version}}`, tar.gz with LICENSE, README.md and CHANGELOG.md, `checksums.txt`) and `.github/workflows/release.yml` (runs on a pushed version tag matching the GitHub glob `v[0-9]+.[0-9]+.[0-9]+*`, so `v0.2.1` and `v1.0.0-rc.1` but not the moving major tag `v0`; `ci_files_test.go` mirrors the glob semantics; only the release job has `contents: write`; only `GITHUB_TOKEN`). `ci_files_test.go` pins both files. No Homebrew section exists because no tap exists; add one only together with the tap repository and its token.
