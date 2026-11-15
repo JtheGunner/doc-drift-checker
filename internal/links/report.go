@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
+	"unicode"
 
 	pathglob "github.com/JtheGunner/doc-drift-checker/internal/glob"
 )
@@ -51,18 +53,19 @@ func MatchDocs(globs, tracked []string) []string {
 	return docs
 }
 
-// WriteText prints the report grouped by doc file and section.
+// WriteText prints the report grouped by doc file and section. Repository-provided
+// values are neutralised with clean.
 func WriteText(w io.Writer, r Report) error {
 	for _, doc := range r.Docs {
-		if _, err := fmt.Fprintf(w, "%s\n", doc.Doc); err != nil {
+		if _, err := fmt.Fprintf(w, "%s\n", clean(doc.Doc)); err != nil {
 			return err
 		}
 		for _, s := range doc.Sections {
-			if _, err := fmt.Fprintf(w, "  %s (lines %d-%d)\n", s.Heading, s.StartLine, s.EndLine); err != nil {
+			if _, err := fmt.Fprintf(w, "  %s (lines %d-%d)\n", clean(s.Heading), s.StartLine, s.EndLine); err != nil {
 				return err
 			}
 			for _, l := range s.Links {
-				if _, err := fmt.Fprintf(w, "    %s [%s]\n", l.File, l.Origin); err != nil {
+				if _, err := fmt.Fprintf(w, "    %s [%s]\n", clean(l.File), l.Origin); err != nil {
 					return err
 				}
 			}
@@ -71,7 +74,7 @@ func WriteText(w io.Writer, r Report) error {
 				if m.Line > 0 {
 					line = fmt.Sprintf(" (line %d)", m.Line)
 				}
-				if _, err := fmt.Fprintf(w, "    missing: %s [%s]%s\n", m.Ref, m.Origin, line); err != nil {
+				if _, err := fmt.Fprintf(w, "    missing: %s [%s]%s\n", clean(m.Ref), m.Origin, line); err != nil {
 					return err
 				}
 			}
@@ -90,4 +93,33 @@ func WriteJSON(w io.Writer, r Report) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(r)
+}
+
+// maxTextLine caps one printed value in characters.
+const maxTextLine = 200
+
+// clean neutralises untrusted text for the terminal: invalid UTF-8 becomes
+// U+FFFD, control and format characters become \xNN or \uNNNN escapes, and the
+// result is cut to maxTextLine characters. It mirrors report.clean, which links
+// cannot import (report depends on links).
+func clean(s string) string {
+	s = strings.ToValidUTF8(s, "\uFFFD")
+	var b strings.Builder
+	count := 0
+	for _, r := range s {
+		if count == maxTextLine {
+			b.WriteString("...")
+			break
+		}
+		count++
+		switch {
+		case r < 0x100 && unicode.IsControl(r):
+			fmt.Fprintf(&b, "\\x%02x", r)
+		case unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r == '\u2028' || r == '\u2029':
+			fmt.Fprintf(&b, "\\u%04x", r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
