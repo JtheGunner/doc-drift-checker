@@ -59,6 +59,8 @@ CI integrations at the repo root: `action.yml` (composite action: validates inpu
 
 `.goreleaser.yaml` (v2: darwin/linux x amd64/arm64, `CGO_ENABLED=0`, `-X main.version={{.Version}}`, tar.gz with LICENSE, README.md and CHANGELOG.md, `checksums.txt`) and `.github/workflows/release.yml` (runs on a pushed `v*` tag; only the release job has `contents: write`; only `GITHUB_TOKEN`). `ci_files_test.go` pins both files. No Homebrew section exists because no tap exists; add one only together with the tap repository and its token.
 
+Every remote `uses:` in `.github/workflows/*` and `action.yml` is pinned to a full 40-character commit SHA with the version as a trailing comment (`uses: owner/repo@<sha> # v1.2.3`); a mutable tag would run foreign code with the job's token. Resolve a SHA with `gh api repos/<owner>/<repo>/tags --jq` (the tag's `commit.sha`, not an annotated tag object). `TestRemoteActionsArePinnedToCommits` enforces it; `.github/dependabot.yml` proposes weekly updates for the pins. The usage examples in `docs/ci-integration.md` show tags for readability and are not scanned.
+
 Cutting a release: set the date of the version in `CHANGELOG.md` (it reads `Unreleased` until then) and merge to `main`, then tag `vX.Y.Z` on `main` and push the tag. Check the config locally with `goreleaser check` and `goreleaser release --snapshot --clean --skip=publish` (output goes to the gitignored `dist/`). The README and `docs/ci-integration.md` tell users the Action needs a released tag (`v0` is a placeholder).
 
 ## Drift check (history mode)
