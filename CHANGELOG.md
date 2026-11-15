@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Implicit references to the section's own documentation file or to another file matching the `docs` globs no longer link a section, so they cause no false drift (for example a "Changelog" section that mentions `CHANGELOG.md`). Annotations and `mappings` are unchanged.
+
 ## [0.2.1] - 2026-11-15
 
 ### Changed

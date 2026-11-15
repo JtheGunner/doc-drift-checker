@@ -47,6 +47,8 @@ Untrusted repo content: read files only via `fsx.ReadRegularFile(root, rel)` (os
 
 Origins: `annotation`, `config` (`mappings`), `implicit` (file-path and relative-link references). Explicit links replace implicit ones, and a section's own text excludes its child sections.
 
+Doc-to-doc rule: an implicit reference to the section's own doc or to any tracked file matching the `docs` globs creates no link and no `missing` entry (`isDocFile` in `internal/links/resolve.go`; other files such as `LICENSE` still link). Explicit links (annotation, `mappings`) to doc files are unchanged. The rule lives in `Resolve` only, so `links`, `check` and `explain` agree.
+
 ## Drift check (diff mode)
 
 `check --base <ref> [--format text|json|sarif|github] [--warn-only]` compares `base...HEAD`. `internal/detect` is the pure core (a linked file changed and no line of the section's own range changed); `internal/cli/check.go` gathers git data. Files removed or renamed away are added to the file list used for link resolution, so sections mapped to them still trigger. Shared input gathering lives in `internal/cli/inputs.go`.
