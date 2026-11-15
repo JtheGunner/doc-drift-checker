@@ -344,6 +344,28 @@ func TestAckRejectsSymlinkedLockfile(t *testing.T) {
 	}
 }
 
+func TestAckWritesNewLockfileWithModeAndNoLeftovers(t *testing.T) {
+	r := historyRepo(t)
+	mustAck(t, "usage")
+
+	info, err := os.Lstat(filepath.Join(r.Dir, lock.FileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Fatalf("lockfile mode = %o, want 644", got)
+	}
+	entries, err := os.ReadDir(r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".tmp") {
+			t.Fatalf("temporary file left behind: %s", e.Name())
+		}
+	}
+}
+
 func assertLockHas(t *testing.T, r *testutil.Repo, key string) {
 	t.Helper()
 	if !strings.Contains(readLock(t, r), `"`+key+`"`) {

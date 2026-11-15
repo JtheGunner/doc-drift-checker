@@ -91,7 +91,7 @@ func runAck(w io.Writer, arg string) error {
 	if err != nil {
 		return err
 	}
-	if err := writeLock(in.root, data); err != nil {
+	if err := writeFileAtomic(in.root, lock.FileName, data, 0o644); err != nil {
 		return err
 	}
 	noun := "files"
