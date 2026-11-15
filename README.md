@@ -378,7 +378,7 @@ golangci-lint run
 
 Tests that involve git build real temporary repositories; `git` must be installed. Every change to relevance or link resolution needs a test for the case that must **not** be reported.
 
-Releases are built by [GoReleaser](https://goreleaser.com) when a `v*` tag is pushed, see [`.goreleaser.yaml`](.goreleaser.yaml).
+Releases are built by [GoReleaser](https://goreleaser.com) when a version tag such as `v0.2.1` is pushed (the moving `v0` tag does not trigger a release), see [`.goreleaser.yaml`](.goreleaser.yaml).
 
 ---
 

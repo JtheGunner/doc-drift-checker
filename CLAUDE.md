@@ -61,7 +61,7 @@ CI integrations at the repo root: `action.yml` (composite action: validates inpu
 
 ## Release
 
-`.goreleaser.yaml` (v2: darwin/linux x amd64/arm64, `CGO_ENABLED=0`, `-X main.version={{.Version}}`, tar.gz with LICENSE, README.md and CHANGELOG.md, `checksums.txt`) and `.github/workflows/release.yml` (runs on a pushed `v*` tag; only the release job has `contents: write`; only `GITHUB_TOKEN`). `ci_files_test.go` pins both files. No Homebrew section exists because no tap exists; add one only together with the tap repository and its token.
+`.goreleaser.yaml` (v2: darwin/linux x amd64/arm64, `CGO_ENABLED=0`, `-X main.version={{.Version}}`, tar.gz with LICENSE, README.md and CHANGELOG.md, `checksums.txt`) and `.github/workflows/release.yml` (runs on a pushed version tag matching the GitHub glob `v[0-9]+.[0-9]+.[0-9]+*`, so `v0.2.1` and `v1.0.0-rc.1` but not the moving major tag `v0`; `ci_files_test.go` mirrors the glob semantics; only the release job has `contents: write`; only `GITHUB_TOKEN`). `ci_files_test.go` pins both files. No Homebrew section exists because no tap exists; add one only together with the tap repository and its token.
 
 Every remote `uses:` in `.github/workflows/*` and `action.yml` is pinned to a full 40-character commit SHA with the version as a trailing comment (`uses: owner/repo@<sha> # v1.2.3`); a mutable tag would run foreign code with the job's token. Resolve a SHA with `gh api repos/<owner>/<repo>/tags --jq` (the tag's `commit.sha`, not an annotated tag object). `TestRemoteActionsArePinnedToCommits` enforces it; `.github/dependabot.yml` proposes weekly updates for the pins. The usage examples in `docs/ci-integration.md` show tags for readability and are not scanned.
 
