@@ -266,6 +266,65 @@ type releaseWorkflow struct {
 	} `yaml:"jobs"`
 }
 
+// releaseTagFilter matches version tags (vX.Y.Z with an optional suffix) but
+// not the moving major tag (v0), which would make GoReleaser fail.
+const releaseTagFilter = "v[0-9]+.[0-9]+.[0-9]+*"
+
+// githubGlobToRegexp mirrors the subset of GitHub's filter pattern syntax used
+// by the tag filter: "*" is any run of characters except "/", "+" repeats the
+// preceding character or class one or more times, "?" makes it optional,
+// "[...]" is a character class, and every other character (including ".")
+// is literal.
+func githubGlobToRegexp(t *testing.T, glob string) *regexp.Regexp {
+	t.Helper()
+	var b strings.Builder
+	b.WriteString("^")
+	for i := 0; i < len(glob); i++ {
+		switch c := glob[i]; c {
+		case '*':
+			b.WriteString("[^/]*")
+		case '+', '?':
+			b.WriteByte(c)
+		case '[':
+			end := strings.IndexByte(glob[i:], ']')
+			if end < 0 {
+				t.Fatalf("unterminated class in %q", glob)
+			}
+			b.WriteString(glob[i : i+end+1])
+			i += end
+		default:
+			b.WriteString(regexp.QuoteMeta(string(c)))
+		}
+	}
+	b.WriteString("$")
+	return regexp.MustCompile(b.String())
+}
+
+func TestReleaseTagFilterMatchesOnlyVersionTags(t *testing.T) {
+	re := githubGlobToRegexp(t, releaseTagFilter)
+	tests := []struct {
+		tag  string
+		want bool
+	}{
+		{"v0.2.1", true},
+		{"v1.0.0", true},
+		{"v10.20.30", true},
+		{"v1.0.0-rc.1", true},
+		{"v0", false},
+		{"v1", false},
+		{"v0.2", false},
+		{"v", false},
+		{"0.2.1", false},
+		{"va.b.c", false},
+		{"release/v1.0.0", false},
+	}
+	for _, tc := range tests {
+		if got := re.MatchString(tc.tag); got != tc.want {
+			t.Errorf("tag %q: match = %v, want %v", tc.tag, got, tc.want)
+		}
+	}
+}
+
 func readStrict(t *testing.T, path string, out any) {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -283,8 +342,8 @@ func TestReleaseWorkflow(t *testing.T) {
 	var w releaseWorkflow
 	readStrict(t, ".github/workflows/release.yml", &w)
 
-	if len(w.On.Push.Tags) != 1 || w.On.Push.Tags[0] != "v*" || len(w.On.Push.Branches) != 0 {
-		t.Errorf("trigger must be exactly push of v* tags: %+v", w.On.Push)
+	if len(w.On.Push.Tags) != 1 || w.On.Push.Tags[0] != releaseTagFilter || len(w.On.Push.Branches) != 0 {
+		t.Errorf("trigger must be exactly push of %s tags: %+v", releaseTagFilter, w.On.Push)
 	}
 	if len(w.Permissions) != 1 || w.Permissions["contents"] != "read" {
 		t.Errorf("top-level permissions = %v, want contents: read only", w.Permissions)
