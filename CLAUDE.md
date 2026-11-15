@@ -61,7 +61,7 @@ CI integrations at the repo root: `action.yml` (composite action: validates inpu
 
 Every remote `uses:` in `.github/workflows/*` and `action.yml` is pinned to a full 40-character commit SHA with the version as a trailing comment (`uses: owner/repo@<sha> # v1.2.3`); a mutable tag would run foreign code with the job's token. Resolve a SHA with `gh api repos/<owner>/<repo>/tags --jq` (the tag's `commit.sha`, not an annotated tag object). `TestRemoteActionsArePinnedToCommits` enforces it; `.github/dependabot.yml` proposes weekly updates for the pins. The usage examples in `docs/ci-integration.md` show tags for readability and are not scanned.
 
-Cutting a release: set the date of the version in `CHANGELOG.md` (it reads `Unreleased` until then) and merge to `main`, then tag `vX.Y.Z` on `main` and push the tag. Check the config locally with `goreleaser check` and `goreleaser release --snapshot --clean --skip=publish` (output goes to the gitignored `dist/`). The README and `docs/ci-integration.md` tell users the Action needs a released tag (`v0` is a placeholder).
+Cutting a release: set the date of the version in `CHANGELOG.md` (it reads `Unreleased` until then) and merge to `main`, then tag `vX.Y.Z` on `main` and push the tag. The moving major tag (`v0` while the version is 0.x) is the reference the docs show for the Action: after each release it is moved to the new tag (`git tag -f v0 vX.Y.Z^{commit}`, then a forced tag push, which is the owner's step). Check the config locally with `goreleaser check` and `goreleaser release --snapshot --clean --skip=publish` (output goes to the gitignored `dist/`).
 
 ## Drift check (history mode)
 
