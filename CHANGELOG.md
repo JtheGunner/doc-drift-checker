@@ -6,8 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-15
+
+### Changed
+
+- The minimal Go version for `go install` and source builds is now 1.25 (it was 1.27.3). The README names the minimum.
+- The repository gained a security policy (`SECURITY.md`) and runs its own documentation check on pull requests (warn-only), and its CI now tests on macOS as well as Linux, with the race detector. No change for users of the binary.
+
 ### Fixed
 
+- The release workflow no longer runs when the moving major tag (`v0`) is updated, only for version tags such as `v0.2.2`.
 - Implicit references to the section's own documentation file or to another file matching the `docs` globs no longer link a section, so they cause no false drift (for example a "Changelog" section that mentions `CHANGELOG.md`). Annotations and `mappings` are unchanged.
 
 ## [0.2.1] - 2026-11-15
