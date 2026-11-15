@@ -4,11 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). The release date is filled in when the version tag is created.
 
-## [Unreleased]
+## [0.2.3] - 2026-11-16
 
 ### Added
 
 - `links` reports `mappings` keys that match no section (`unmatched mapping:` in text, `unmatchedMappings` in JSON). `check` and `explain` are unchanged.
+
+### Documentation
+
+- The README has a new section, "Choosing good mappings": key forms (full heading text including emoji, or `#` plus the anchor), mapping the file that defines a section, and rolling out with `--warn-only` first. `docs/ci-integration.md` gained a "Getting started" section.
 
 ## [0.2.2] - 2026-11-15
 
