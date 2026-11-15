@@ -70,10 +70,10 @@ func TestWriteJSONSchema(t *testing.T) {
 
 func TestWriteJSONEmptyReportHasEmptyArray(t *testing.T) {
 	var out bytes.Buffer
-	if err := links.WriteJSON(&out, links.Report{Docs: []links.DocLinks{}}); err != nil {
+	if err := links.WriteJSON(&out, links.Report{Docs: []links.DocLinks{}, UnmatchedMappings: []links.Missing{}}); err != nil {
 		t.Fatal(err)
 	}
-	if got := out.String(); got != "{\n  \"docs\": []\n}\n" {
+	if got := out.String(); got != "{\n  \"docs\": [],\n  \"unmatchedMappings\": []\n}\n" {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -95,5 +95,32 @@ func TestWriteTextNeutralisesRepositoryText(t *testing.T) {
 		"    missing: m\\x0d.go [implicit] (line 1)\n"
 	if out.String() != want {
 		t.Fatalf("got:\n%q\nwant:\n%q", out.String(), want)
+	}
+}
+
+func TestWriteUnmatchedMappings(t *testing.T) {
+	r := links.Report{
+		Docs:              []links.DocLinks{},
+		UnmatchedMappings: []links.Missing{{Ref: "Fl\x1bags", Origin: links.OriginConfig}},
+	}
+	var text bytes.Buffer
+	if err := links.WriteText(&text, r); err != nil {
+		t.Fatal(err)
+	}
+	if want := "unmatched mapping: Fl\\x1bags [config]\n"; text.String() != want {
+		t.Fatalf("got %q, want %q", text.String(), want)
+	}
+	var js bytes.Buffer
+	if err := links.WriteJSON(&js, r); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		UnmatchedMappings []struct{ Ref, Origin string }
+	}
+	if err := json.Unmarshal(js.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.UnmatchedMappings) != 1 || got.UnmatchedMappings[0].Ref != "Fl\x1bags" || got.UnmatchedMappings[0].Origin != "config" {
+		t.Fatalf("got %+v", got)
 	}
 }

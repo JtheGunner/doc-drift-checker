@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/JtheGunner/doc-drift-checker/internal/cli"
 	"github.com/JtheGunner/doc-drift-checker/internal/testutil"
 )
 
@@ -142,5 +143,77 @@ func TestLinksCommandReadsRegularDoc(t *testing.T) {
 	linksRepo(t)
 	if _, err := run(t, "dev", "links"); err != nil {
 		t.Fatalf("regular doc file must still work: %v", err)
+	}
+}
+
+func TestLinksCommandReportsUnmatchedMappingKeys(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Write("README.md", "# Project\n\n## 🚩 Flags\n\ntext\n\n## Usage\n\ntext\n")
+	r.Write("src/lib.go", "package src\n")
+	r.Write(".docdrift.yaml", "mappings:\n  Flags: [\"src/*.go\"]\n  \"🚩 Flags\": [\"src/*.go\"]\n  \"#usage\": [\"src/*.go\"]\n")
+	r.Commit("base")
+	t.Chdir(r.Dir)
+
+	out, err := run(t, "dev", "links")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(out, "unmatched mapping: Flags [config]\n") || strings.Count(out, "unmatched mapping:") != 1 {
+		t.Fatalf("expected exactly the key Flags to be reported:\n%s", out)
+	}
+
+	out, err = run(t, "dev", "links", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report struct {
+		UnmatchedMappings []struct{ Ref, Origin string }
+	}
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatal(err)
+	}
+	if len(report.UnmatchedMappings) != 1 || report.UnmatchedMappings[0].Ref != "Flags" || report.UnmatchedMappings[0].Origin != "config" {
+		t.Fatalf("got %+v", report.UnmatchedMappings)
+	}
+}
+
+func TestLinksCommandMatchingMappingsReportNothing(t *testing.T) {
+	r := linksRepo(t)
+	r.CommitFile(".docdrift.yaml", "mappings:\n  Empty: [\"src/*.go\"]\n  \"#notes\": [\"src/*.go\"]\n", "config")
+	out, err := run(t, "dev", "links", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "\"unmatchedMappings\": []") {
+		t.Fatalf("expected an empty list:\n%s", out)
+	}
+}
+
+func TestUnmatchedMappingKeyDoesNotChangeCheckOrExplain(t *testing.T) {
+	setup := func(config string) *testutil.Repo {
+		r := testutil.NewRepo(t)
+		r.Write("README.md", "# Project\n\n## Usage\n\nprose\n")
+		r.Write("src/lib.go", "package src\n")
+		r.Write(".docdrift.yaml", config)
+		r.Commit("base")
+		r.Write("src/lib.go", "package src\n\nfunc Added() {}\n")
+		r.Commit("code change")
+		t.Chdir(r.Dir)
+		return r
+	}
+	const mapped = "mappings:\n  Usage: [\"src/*.go\"]\n"
+	setup(mapped)
+	wantCheck, wantErr := run(t, "dev", "check", "--base", "HEAD~1")
+	wantExplain, wantExplainErr := run(t, "dev", "explain", "Usage", "--base", "HEAD~1")
+
+	setup(mapped + "  Typo: [\"src/*.go\"]\n")
+	gotCheck, gotErr := run(t, "dev", "check", "--base", "HEAD~1")
+	gotExplain, gotExplainErr := run(t, "dev", "explain", "Usage", "--base", "HEAD~1")
+
+	if gotCheck != wantCheck || cli.ExitCode(gotErr) != cli.ExitCode(wantErr) || wantErr == nil {
+		t.Fatalf("check changed:\n%s\nvs\n%s (%v / %v)", gotCheck, wantCheck, gotErr, wantErr)
+	}
+	if gotExplain != wantExplain || (gotExplainErr == nil) != (wantExplainErr == nil) {
+		t.Fatalf("explain changed:\n%s\nvs\n%s", gotExplain, wantExplain)
 	}
 }

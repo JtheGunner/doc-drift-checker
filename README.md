@@ -284,7 +284,7 @@ severity:
 | --- | --- | --- |
 | `docs` | `["README.md"]` | Documentation files to check. |
 | `ignore` | tests, generated code, lockfiles and vendored code | Globs of paths whose changes never cause drift. |
-| `mappings` | none | Section-to-code links by heading text or anchor. |
+| `mappings` | none | Section-to-code links. A key is the **complete heading text, emoji included** (`🚩 Flags`, not `Flags`), or `#anchor`. `doc-drift-checker links` lists keys that match no section as `unmatched mapping`; `check` and `explain` ignore them. |
 | `mode.default` | `diff` (see below) | `diff` or `history`: the mode of `check` and `explain` when `--base` is not given. `--base` always selects diff mode. Left unset, a run without `--base` uses history mode. Set to `diff`, a run without `--base` is a usage error (exit `2`). |
 | `severity.fail-on` | `low` | Lowest severity that makes `check` exit `1`. The `--min-severity` flag wins. |
 

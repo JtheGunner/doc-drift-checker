@@ -247,12 +247,9 @@ func annotationGlobs(text string) []string {
 // configGlobs returns the mapped globs whose key is the section's heading
 // text or its anchor ("#anchor"), in key order.
 func configGlobs(cfg config.Config, s docparse.Section) []string {
-	if s.Level == 0 {
-		return nil
-	}
 	keys := make([]string, 0, len(cfg.Mappings))
 	for key := range cfg.Mappings {
-		if strings.TrimSpace(key) == s.Title || key == "#"+s.Anchor {
+		if keyMatches(key, s) {
 			keys = append(keys, key)
 		}
 	}
@@ -262,6 +259,39 @@ func configGlobs(cfg config.Config, s docparse.Section) []string {
 		globs = append(globs, cfg.Mappings[key]...)
 	}
 	return globs
+}
+
+// keyMatches reports whether a mappings key names the section: its full
+// heading text (emoji included, surrounding space ignored) or "#anchor".
+// The preamble (level 0) has no heading and is never named.
+func keyMatches(key string, s docparse.Section) bool {
+	return s.Level != 0 && (strings.TrimSpace(key) == s.Title || key == "#"+s.Anchor)
+}
+
+// UnmatchedMappings returns the mappings keys that name no section of any of
+// the given documents, as config-origin entries sorted by key. Such a key has
+// no effect, so reporting it is the only way a user learns about a typo or a
+// heading that differs from the key.
+func UnmatchedMappings(cfg config.Config, docs [][]docparse.Section) []Missing {
+	out := []Missing{}
+	for key := range cfg.Mappings {
+		if !matchesAnySection(key, docs) {
+			out = append(out, Missing{Ref: key, Origin: OriginConfig})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Ref < out[j].Ref })
+	return out
+}
+
+func matchesAnySection(key string, docs [][]docparse.Section) bool {
+	for _, sections := range docs {
+		for _, s := range sections {
+			if keyMatches(key, s) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // resolveReference returns the tracked files a reference points at. A

@@ -286,3 +286,55 @@ func TestSectionMetadata(t *testing.T) {
 		t.Fatalf("got %+v", s)
 	}
 }
+
+func TestUnmatchedMappings(t *testing.T) {
+	readme := docparse.ParseSections([]byte("# T\n\n## 🚩 Flags\n\ntext\n\n## Usage\n\ntext\n"))
+	guide := docparse.ParseSections([]byte("# Guide\n\n## Install\n\ntext\n"))
+	tests := map[string]struct {
+		mappings map[string][]string
+		want     []links.Missing
+	}{
+		"key without the emoji is reported": {
+			mappings: map[string][]string{"Flags": {"cmd/**"}},
+			want:     []links.Missing{{Ref: "Flags", Origin: links.OriginConfig}},
+		},
+		"full heading with emoji matches": {
+			mappings: map[string][]string{"🚩 Flags": {"cmd/**"}},
+			want:     []links.Missing{},
+		},
+		"heading with surrounding space matches": {
+			mappings: map[string][]string{" Usage ": {"cmd/**"}},
+			want:     []links.Missing{},
+		},
+		"anchor matches": {
+			mappings: map[string][]string{"#usage": {"cmd/**"}},
+			want:     []links.Missing{},
+		},
+		"anchor without hash is reported": {
+			mappings: map[string][]string{"usage": {"cmd/**"}},
+			want:     []links.Missing{{Ref: "usage", Origin: links.OriginConfig}},
+		},
+		"heading of another doc matches": {
+			mappings: map[string][]string{"Install": {"cmd/**"}},
+			want:     []links.Missing{},
+		},
+		"unmatched keys are sorted": {
+			mappings: map[string][]string{"b": {"x"}, "a": {"x"}, "Usage": {"x"}},
+			want: []links.Missing{
+				{Ref: "a", Origin: links.OriginConfig},
+				{Ref: "b", Origin: links.OriginConfig},
+			},
+		},
+		"no mappings": {want: []links.Missing{}},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			cfg := config.Defaults()
+			cfg.Mappings = tc.mappings
+			got := links.UnmatchedMappings(cfg, [][]docparse.Section{readme, guide})
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("got %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}

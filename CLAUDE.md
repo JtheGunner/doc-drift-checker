@@ -47,6 +47,8 @@ Untrusted repo content: read files only via `fsx.ReadRegularFile(root, rel)` (os
 
 Origins: `annotation`, `config` (`mappings`), `implicit` (file-path and relative-link references). Explicit links replace implicit ones, and a section's own text excludes its child sections.
 
+Mappings keys: a key matches a section iff its trimmed text equals the full heading text (emoji included) or it is `#anchor` (`keyMatches`). `links.UnmatchedMappings` (pure) lists keys that match no section of any configured doc; `links` prints them as `unmatched mapping: <key> [config]` after the docs and adds `unmatchedMappings` (`[{ref, origin: "config"}]`, sorted, never null) to its JSON (schemaVersion stays 1, documented on `links.Report`). It is a hint only: `check` and `explain` do not read it and keep their results and exit codes.
+
 Doc-to-doc rule: an implicit reference to the section's own doc or to any tracked file matching the `docs` globs creates no link and no `missing` entry (`isDocFile` in `internal/links/resolve.go`; other files such as `LICENSE` still link). Explicit links (annotation, `mappings`) to doc files are unchanged. The rule lives in `Resolve` only, so `links`, `check` and `explain` agree.
 
 ## Drift check (diff mode)
