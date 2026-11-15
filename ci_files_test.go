@@ -6,6 +6,7 @@ package ciconfig
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -131,12 +132,65 @@ func TestActionPassesInputsThroughEnv(t *testing.T) {
 	}
 }
 
-var fullShaOrVersionTag = regexp.MustCompile(`@([0-9a-f]{40}|v\d+\.\d+\.\d+)( |$)`)
+// pinnedUses matches a remote action reference pinned to a full commit SHA
+// and followed by a version comment such as "# v4.4.0".
+var pinnedUses = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40} # v\d+\.\d+\.\d+$`)
 
-func TestActionThirdPartyActionsArePinned(t *testing.T) {
-	for _, step := range loadAction(t).Runs.Steps {
-		if step.Uses != "" && !fullShaOrVersionTag.MatchString(step.Uses+" ") {
-			t.Errorf("action %q is not pinned to a version tag or commit", step.Uses)
+// usesLine finds a `uses:` key in a workflow or action file, with or without
+// the leading list dash.
+var usesLine = regexp.MustCompile(`^\s*(?:-\s+)?uses:\s*(.+?)\s*$`)
+
+// TestRemoteActionsArePinnedToCommits makes sure no workflow or composite
+// action runs a mutable tag: a moved tag would execute foreign code with the
+// job's token. Local (./) references are exempt.
+func TestRemoteActionsArePinnedToCommits(t *testing.T) {
+	files := []string{"action.yml"}
+	workflows, err := filepath.Glob(".github/workflows/*.y*ml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(workflows) == 0 {
+		t.Fatal("no workflow files found")
+	}
+	files = append(files, workflows...)
+
+	var seen int
+	for _, path := range files {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(data), "\n") {
+			m := usesLine.FindStringSubmatch(line)
+			if m == nil || strings.HasPrefix(m[1], "./") {
+				continue
+			}
+			seen++
+			if !pinnedUses.MatchString(m[1]) {
+				t.Errorf("%s:%d: %q is not pinned to a 40-character commit SHA with a version comment", path, i+1, m[1])
+			}
+		}
+	}
+	if seen == 0 {
+		t.Fatal("no remote action references found; the scan is broken")
+	}
+}
+
+func TestPinnedUsesPattern(t *testing.T) {
+	sha := strings.Repeat("a", 40)
+	cases := map[string]bool{
+		"actions/checkout@" + sha + " # v4.4.0":                  true,
+		"github/codeql-action/upload-sarif@" + sha + " # v3.1.0": true,
+		"actions/checkout@v4":                                    false,
+		"actions/checkout@v4.4.0":                                false,
+		"actions/checkout@" + sha:                                false,
+		"actions/checkout@" + sha[:39] + " # v4.4.0":             false,
+		"actions/checkout@" + strings.ToUpper(sha) + " # v4.4.0": false,
+		"actions/checkout@main # v4.4.0":                         false,
+	}
+	for in, want := range cases {
+		if got := pinnedUses.MatchString(in); got != want {
+			t.Errorf("pinnedUses(%q) = %v, want %v", in, got, want)
 		}
 	}
 }
