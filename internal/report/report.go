@@ -1,4 +1,5 @@
 // Package report renders drift findings as text, JSON, SARIF or GitHub annotations.
+// The text reports (check and explain) neutralise every repository-provided value.
 //
 // # JSON schema (schemaVersion 1)
 //
