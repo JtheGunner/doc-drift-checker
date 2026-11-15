@@ -42,18 +42,25 @@ type Skipped struct {
 
 // Suggest proposes annotations for the sections of doc whose links are all
 // implicit and number between 1 and MaxSuggestedFiles. Sections with an
-// explicit link, no link or too many links are not suggested. A section with a
-// file name that cannot be written safely into an annotation comment is
-// reported as skipped instead. Suggestions keep document order.
+// explicit link or no link are not suggested. A section with more implicit
+// files than MaxSuggestedFiles, or with a file name that cannot be written
+// safely into an annotation comment, is reported as skipped instead. Suggestions keep document order.
 func Suggest(doc DocLinks) ([]Suggestion, []Skipped) {
 	var suggestions []Suggestion
 	var skipped []Skipped
 	for _, s := range doc.Sections {
-		if s.Level == 0 || len(s.Links) == 0 || len(s.Links) > MaxSuggestedFiles {
+		if s.Level == 0 || len(s.Links) == 0 {
 			continue
 		}
 		files, onlyImplicit := implicitFiles(s)
 		if !onlyImplicit {
+			continue
+		}
+		if len(files) > MaxSuggestedFiles {
+			skipped = append(skipped, Skipped{
+				Heading: s.Heading, Line: s.StartLine,
+				Reason: fmt.Sprintf("links %d files, more than the %d allowed for a suggestion", len(files), MaxSuggestedFiles),
+			})
 			continue
 		}
 		if file, ok := firstUnsafe(files); ok {
