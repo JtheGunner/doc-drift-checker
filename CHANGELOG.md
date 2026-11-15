@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-15
+
 ### Changed
 
 - `check` and `explain` apply `mode.default` when `--base` is not given: `history` runs history mode, `diff` is a usage error asking for `--base`. An unset key behaves as before (history mode). `--base` always selects diff mode.
