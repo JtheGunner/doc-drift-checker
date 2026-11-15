@@ -234,15 +234,17 @@ Each Markdown heading starts a section. A section's own text does not include it
 <!-- drift: internal/config/**, cmd/app/flags.go -->
 ```
 
-**Config mapping.** The same link can live in `.docdrift.yaml`, keyed by heading text or anchor:
+**Config mapping.** The same link can live in `.docdrift.yaml`, keyed by the complete heading text (emoji included) or by `#` plus the anchor:
 
 ```yaml
 mappings:
-  Configuration:
-    - "internal/config/**"
-  "#installation":
-    - "cmd/**"
+  "🛠️ Configuration":
+    - "internal/config/config.go"
+  "#-flags":
+    - "cmd/app/flags.go"
 ```
+
+See [Choosing good mappings](#-choosing-good-mappings) for how narrow a mapping should be.
 
 **Implicit.** Without an annotation or mapping, file paths in the section text (such as `` `cmd/main.go` ``) and relative Markdown links to tracked files link the section to those files.
 
@@ -268,10 +270,11 @@ ignore:
   - "**/testdata/**"
   - "**/vendor/**"
 
-# Explicit section-to-code links, keyed by heading text or anchor.
+# Explicit section-to-code links, keyed by the complete heading text or "#anchor".
+# Map the file that defines a section, not a whole package.
 mappings:
-  Installation:
-    - "cmd/**"
+  "🚩 Flags":
+    - "cmd/app/flags.go"
 
 mode:
   default: history     # mode without --base: history, or diff (needs --base)
