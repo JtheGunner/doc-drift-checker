@@ -326,6 +326,12 @@ func TestExplainAgreesWithCheck(t *testing.T) {
 			mustAck(t, "usage")
 			r.CommitFile("src/lib.go", changedLib, "change lib")
 		}},
+		{"diff: implicit doc references", true, func(t *testing.T) {
+			docLinksRepo(t, true).CommitFile("CHANGELOG.md", docLinksChangelog, "update changelog")
+		}},
+		{"history: implicit doc references", false, func(t *testing.T) {
+			docLinksRepo(t, false).CommitFile("CHANGELOG.md", docLinksChangelog, "update changelog")
+		}},
 		{"history: code newer", false, func(t *testing.T) {
 			historyRepo(t).CommitFile("src/lib.go", newLib, "change code")
 		}},

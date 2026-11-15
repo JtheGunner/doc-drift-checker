@@ -9,6 +9,9 @@
 //   - config: Config.Mappings, keyed by heading text or anchor ("#usage")
 //   - implicit: file-path and relative-link references found in the section's own text
 //
+// Implicit references to the section's own document or to any file matching
+// the docs globs are skipped (doc-to-doc references are not code links and are
+// not reported as missing); explicit links to such files stay.
 // Explicit links (annotation and config) replace implicit ones. Annotation and
 // config links are unioned; a file matched by both is reported once as annotation.
 // Identifier, flag, env-var and command references are not resolved.
@@ -151,6 +154,9 @@ func resolveSection(docPath string, full, own docparse.Section, cfg config.Confi
 				missing = append(missing, Missing{Ref: ref.Value, Origin: OriginImplicit, Line: ref.Line})
 			}
 			for _, file := range files {
+				if isDocFile(file, docPath, cfg) {
+					continue
+				}
 				setOrigin(byFile, file, OriginImplicit)
 			}
 		}
@@ -163,6 +169,21 @@ func resolveSection(docPath string, full, own docparse.Section, cfg config.Confi
 	sl.Missing = dedupeMissing(missing)
 	sl.Unmapped = len(sl.Links) == 0 && len(sl.Missing) == 0
 	return sl
+}
+
+// isDocFile reports whether an implicit reference to file is a doc-to-doc
+// reference: the section's own document or any file matching the docs globs.
+// Such a reference describes documentation, not code, and never links.
+func isDocFile(file, docPath string, cfg config.Config) bool {
+	if file == docPath {
+		return true
+	}
+	for _, glob := range cfg.Docs {
+		if pathglob.Match(glob, file) {
+			return true
+		}
+	}
+	return false
 }
 
 // setOrigin records origin for file; annotation beats config beats implicit.

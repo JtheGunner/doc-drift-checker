@@ -246,6 +246,8 @@ mappings:
 
 **Implicit.** Without an annotation or mapping, file paths in the section text (such as `` `cmd/main.go` ``) and relative Markdown links to tracked files link the section to those files.
 
+References to the section's own documentation file or to any other file matching the `docs` globs never create an implicit link, because they describe documentation, not code. Annotations and mappings may still point at documentation files.
+
 Explicit links (annotation or mapping) **replace** implicit ones for that section. Run `doc-drift-checker links` to see the result and where each link comes from.
 
 ---

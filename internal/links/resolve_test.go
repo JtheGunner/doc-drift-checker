@@ -144,6 +144,41 @@ func TestDirectoryReferenceLinksTrackedFilesBelow(t *testing.T) {
 	}
 }
 
+func TestImplicitDocToDocReferencesDoNotLink(t *testing.T) {
+	trackedDocs := append([]string{"CHANGELOG.md", "LICENSE", "docs/ci.md"}, tracked...)
+	cfg := config.Defaults()
+	cfg.Docs = []string{"README.md", "docs/*.md", "CHANGELOG.md"}
+	doc := "# T\n\n## S\n\nSee `README.md`, [log](CHANGELOG.md), [ci](docs/ci.md), `LICENSE` and `cmd/app/main.go`.\n"
+	got := section(t, links.Resolve("README.md", docparse.ParseSections([]byte(doc)), cfg, trackedDocs), "S")
+	want := []links.Link{
+		{File: "LICENSE", Origin: links.OriginImplicit},
+		{File: "cmd/app/main.go", Origin: links.OriginImplicit},
+	}
+	if !reflect.DeepEqual(got.Links, want) || len(got.Missing) != 0 {
+		t.Fatalf("doc references must not link: %+v", got)
+	}
+}
+
+func TestImplicitSelfReferenceOnlyIsUnmapped(t *testing.T) {
+	got := section(t, resolve(t, "# T\n\n## S\n\nSee `README.md`.\n", config.Defaults()), "S")
+	if !got.Unmapped || len(got.Links) != 0 || len(got.Missing) != 0 {
+		t.Fatalf("self reference must not map: %+v", got)
+	}
+}
+
+func TestExplicitLinksToDocFilesStay(t *testing.T) {
+	annotated := section(t, resolve(t, "# T\n\n## S\n\nSee `cmd/app/main.go`.\n\n<!-- drift: README.md -->\n", config.Defaults()), "S")
+	if !reflect.DeepEqual(annotated.Links, []links.Link{{File: "README.md", Origin: links.OriginAnnotation}}) {
+		t.Fatalf("annotation links %+v", annotated.Links)
+	}
+	cfg := config.Defaults()
+	cfg.Mappings = map[string][]string{"S": {"README.md"}}
+	mapped := section(t, resolve(t, "# T\n\n## S\n\nText.\n", cfg), "S")
+	if !reflect.DeepEqual(mapped.Links, []links.Link{{File: "README.md", Origin: links.OriginConfig}}) {
+		t.Fatalf("config links %+v", mapped.Links)
+	}
+}
+
 func TestExplicitOverridesImplicit(t *testing.T) {
 	doc := "# T\n\n## S\n\nSee `internal/cli/root.go` and `gone.go`.\n\n<!-- drift: cmd/** -->\n"
 	got := section(t, resolve(t, doc, config.Defaults()), "S")
