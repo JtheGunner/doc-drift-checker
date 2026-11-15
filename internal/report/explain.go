@@ -6,11 +6,11 @@ import (
 	"io"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/JtheGunner/doc-drift-checker/internal/detect"
 	"github.com/JtheGunner/doc-drift-checker/internal/lock"
 	"github.com/JtheGunner/doc-drift-checker/internal/relevance"
+	"github.com/JtheGunner/doc-drift-checker/internal/textsafe"
 )
 
 // maxTextLine caps a single piece of repository-provided text in the text
@@ -305,25 +305,7 @@ func clean(s string) string {
 
 // cleanMax is clean with an explicit cap in characters.
 func cleanMax(s string, limit int) string {
-	s = strings.ToValidUTF8(s, "\uFFFD")
-	var b strings.Builder
-	count := 0
-	for _, r := range s {
-		if count == limit {
-			b.WriteString("...")
-			break
-		}
-		count++
-		switch {
-		case r < 0x100 && (unicode.IsControl(r)):
-			fmt.Fprintf(&b, "\\x%02x", r)
-		case unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r == '\u2028' || r == '\u2029':
-			fmt.Fprintf(&b, "\\u%04x", r)
-		default:
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
+	return textsafe.Escape(s, limit)
 }
 
 // JSON explain report.

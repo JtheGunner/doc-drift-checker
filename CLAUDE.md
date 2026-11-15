@@ -17,7 +17,7 @@ Go CLI that reports when code changed but the README passage describing it did n
 
 ## Layout
 
-`cmd/doc-drift-checker` (thin entry point), `internal/cli` (cobra commands, testable via `NewRootCmd`), `internal/{config,docparse,fsx,gitx,glob,links,lock,detect,relevance,report,testutil}`. Create a package only when a ticket needs it. Keep each package single-purpose; `docparse` and reference extraction stay pure (no filesystem or git access).
+`cmd/doc-drift-checker` (thin entry point), `internal/cli` (cobra commands, testable via `NewRootCmd`), `internal/{config,docparse,fsx,gitx,glob,links,lock,detect,relevance,report,testutil,textsafe}`. Create a package only when a ticket needs it. Keep each package single-purpose; `docparse` and reference extraction stay pure (no filesystem or git access).
 
 ## Testing
 
@@ -91,7 +91,7 @@ Occurrence is a literal whole-token search (`strings.Index` loops, no regex from
 
 Known limits: code comments count as occurrences (a removed flag still mentioned in a comment is not detected); only mapped files are searched, so a flag moved to an unmapped file reads as broken; a bare quoted string equal to the flag name counts as presence. History mode has no base version: every drift there is `low`.
 
-`check --min-severity low|high` sets the lowest severity that exits 1 (default `severity.fail-on` from config, which defaults to `low`; the flag wins; invalid value is a usage error, exit 2). All drifts are printed regardless; `--warn-only` still forces 0 and errors still exit 2. The text report passes every repository-provided value (section, doc, files, reference values) through `report.clean` (control characters escaped, 200-character cap); `links` text output does the same with its own mirror of `clean` (`report` imports `links`, so it cannot be shared). Text output starts each drift with `[low]` or `[high]` and lists `broken references:` (kind, value, `doc:line`). JSON (schemaVersion stays 1) adds `severity` and `brokenReferences` (`[]` when none) per drift; see the `internal/report` package comment. Drift order is unchanged (not sorted by severity).
+`check --min-severity low|high` sets the lowest severity that exits 1 (default `severity.fail-on` from config, which defaults to `low`; the flag wins; invalid value is a usage error, exit 2). All drifts are printed regardless; `--warn-only` still forces 0 and errors still exit 2. The text report passes every repository-provided value (section, doc, files, reference values) through `report.clean` (control characters escaped, 200-character cap); `links` text output does the same through its own `clean` wrapper. Both call `textsafe.Escape` (`internal/textsafe`, pure, one purpose: neutralising untrusted text; `Escape` escapes, `Mask` replaces with `?` for the 80-character `init` heading); the wrappers only fix the cap. Never add another copy of this logic. Text output starts each drift with `[low]` or `[high]` and lists `broken references:` (kind, value, `doc:line`). JSON (schemaVersion stays 1) adds `severity` and `brokenReferences` (`[]` when none) per drift; see the `internal/report` package comment. Drift order is unchanged (not sorted by severity).
 
 ## Evaluation and explain
 

@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/JtheGunner/doc-drift-checker/internal/fsx"
 	"github.com/JtheGunner/doc-drift-checker/internal/gitx"
 	"github.com/JtheGunner/doc-drift-checker/internal/links"
+	"github.com/JtheGunner/doc-drift-checker/internal/textsafe"
 )
 
 // maxPrintedRunes caps repository-provided text (headings) in the output.
@@ -246,18 +246,5 @@ func printPlans(w io.Writer, plans []*docPlan, write bool) error {
 // clean makes repository-provided text safe to print: control and other
 // non-printable characters become "?", and long text is cut.
 func clean(s string) string {
-	var b strings.Builder
-	n := 0
-	for _, r := range s {
-		if n == maxPrintedRunes {
-			b.WriteString("...")
-			break
-		}
-		if unicode.IsControl(r) || !unicode.IsPrint(r) && r != ' ' {
-			r = '?'
-		}
-		b.WriteRune(r)
-		n++
-	}
-	return b.String()
+	return textsafe.Mask(s, maxPrintedRunes)
 }
