@@ -1,0 +1,7 @@
+# Dogfooding: the project checks its own documentation in CI (job docs-drift).
+# Sections are linked to code through the file paths and relative links the
+# docs mention; add a mappings entry or a <!-- drift: ... --> annotation only
+# when a section needs a link the text does not give.
+docs:
+  - "README.md"
+  - "docs/*.md"

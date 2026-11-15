@@ -34,3 +34,23 @@ jobs:
           go-version-file: go.mod
       - run: go build ./...
       - run: go test -race ./...
+
+  # Dogfooding: the project checks its own docs. Reports only (--warn-only)
+  # until .docdrift.yaml has proven stable; drop the flag to make it blocking.
+  docs-drift:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: go build -o "$RUNNER_TEMP/doc-drift-checker" ./cmd/doc-drift-checker
+      - name: Check documentation drift
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          "$RUNNER_TEMP/doc-drift-checker" check --base "origin/${BASE_REF}" --format github --warn-only
