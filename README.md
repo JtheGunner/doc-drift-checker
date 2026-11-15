@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-single%20binary-3776ab?style=flat-square&logo=go&logoColor=white)](#-installation)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux-0ea5e9?style=flat-square)](#-installation)
-[![CI](https://img.shields.io/badge/CI-GitHub%20Action%20%7C%20pre--commit-8b5cf6?style=flat-square)](docs/ci-integration.md)
+[![CI](https://img.shields.io/github/actions/workflow/status/JtheGunner/doc-drift-checker/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/JtheGunner/doc-drift-checker/actions/workflows/ci.yml)
 
 </div>
 
@@ -368,7 +368,7 @@ Details, inputs, the SARIF upload and the pre-commit hook are in [docs/ci-integr
 
 ## 🤝 Contributing
 
-Issues and pull requests are welcome. Please open an issue first for larger changes.
+Issues and pull requests are welcome. Please open an issue first for larger changes. Report security vulnerabilities privately as described in [SECURITY.md](SECURITY.md), not as public issues.
 
 ```sh
 go build ./...
