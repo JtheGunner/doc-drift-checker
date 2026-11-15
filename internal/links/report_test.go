@@ -77,3 +77,23 @@ func TestWriteJSONEmptyReportHasEmptyArray(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestWriteTextNeutralisesRepositoryText(t *testing.T) {
+	r := links.Report{Docs: []links.DocLinks{{
+		Doc: "d\x1b[31m.md",
+		Sections: []links.SectionLinks{{
+			Heading: "H\x1b]0;x\x07", StartLine: 1, EndLine: 2,
+			Links:   []links.Link{{File: "a\x1b[2J.go", Origin: links.OriginImplicit}},
+			Missing: []links.Missing{{Ref: "m\r.go", Origin: links.OriginImplicit, Line: 1}},
+		}},
+	}}}
+	var out bytes.Buffer
+	if err := links.WriteText(&out, r); err != nil {
+		t.Fatal(err)
+	}
+	want := "d\\x1b[31m.md\n  H\\x1b]0;x\\x07 (lines 1-2)\n    a\\x1b[2J.go [implicit]\n" +
+		"    missing: m\\x0d.go [implicit] (line 1)\n"
+	if out.String() != want {
+		t.Fatalf("got:\n%q\nwant:\n%q", out.String(), want)
+	}
+}

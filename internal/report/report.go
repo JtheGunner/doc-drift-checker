@@ -1,4 +1,5 @@
 // Package report renders drift findings as text, JSON, SARIF or GitHub annotations.
+// The text reports (check and explain) neutralise every repository-provided value.
 //
 // # JSON schema (schemaVersion 1)
 //
@@ -174,14 +175,15 @@ func WriteJSON(w io.Writer, mode, base string, drifts []detect.Drift) error {
 
 // WriteText writes one block per drift: the severity and section, its location,
 // the triggering files and, when there are any, the broken references. Nothing
-// is written when there is no drift.
+// is written when there is no drift. Repository-provided values (section, doc,
+// files, reference values) are neutralised with clean.
 func WriteText(w io.Writer, drifts []detect.Drift) error {
 	for _, d := range drifts {
-		if _, err := fmt.Fprintf(w, "[%s] %s\n  %s:%d\n  changed code:\n", severityOf(d), d.Section, d.Doc, d.Line); err != nil {
+		if _, err := fmt.Fprintf(w, "[%s] %s\n  %s:%d\n  changed code:\n", severityOf(d), clean(d.Section), clean(d.Doc), d.Line); err != nil {
 			return err
 		}
 		for _, f := range d.Files {
-			if _, err := fmt.Fprintf(w, "    %s\n", f); err != nil {
+			if _, err := fmt.Fprintf(w, "    %s\n", clean(f)); err != nil {
 				return err
 			}
 		}
@@ -192,7 +194,7 @@ func WriteText(w io.Writer, drifts []detect.Drift) error {
 			return err
 		}
 		for _, r := range d.BrokenReferences {
-			if _, err := fmt.Fprintf(w, "    %s %s (%s:%d)\n", r.Kind, r.Value, d.Doc, r.Line); err != nil {
+			if _, err := fmt.Fprintf(w, "    %s %s (%s:%d)\n", clean(string(r.Kind)), clean(r.Value), clean(d.Doc), r.Line); err != nil {
 				return err
 			}
 		}

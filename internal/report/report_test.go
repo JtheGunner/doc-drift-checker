@@ -3,6 +3,7 @@ package report_test
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/JtheGunner/doc-drift-checker/internal/config"
@@ -136,5 +137,42 @@ func TestWriteTextZeroValueSeverityIsLow(t *testing.T) {
 	}
 	if want := "[low] S\n  a.md:1\n  changed code:\n    x.go\n"; buf.String() != want {
 		t.Fatalf("got %q", buf.String())
+	}
+}
+
+func TestWriteTextNeutralisesRepositoryText(t *testing.T) {
+	drifts := []detect.Drift{{
+		Doc: "docs/\x1b[31mevil.md", Section: "Head\x1b]0;x\x07ing", Line: 2,
+		Files:    []string{"a\x1b[2Jb.go", "old\r.go -> new.go"},
+		Severity: config.SeverityHigh,
+		BrokenReferences: []docparse.Reference{
+			{Kind: docparse.KindFlag, Value: "--x\x1b[0m\u202e", Line: 4},
+		},
+	}}
+	var buf bytes.Buffer
+	if err := report.WriteText(&buf, drifts); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range buf.String() {
+		if r != '\n' && (r < 0x20 || r == 0x7f || r == '\u202e') {
+			t.Fatalf("unescaped control character %q in output:\n%q", r, buf.String())
+		}
+	}
+	want := "[high] Head\\x1b]0;x\\x07ing\n  docs/\\x1b[31mevil.md:2\n  changed code:\n" +
+		"    a\\x1b[2Jb.go\n    old\\x0d.go -> new.go\n" +
+		"  broken references:\n    flag --x\\x1b[0m\\u202e (docs/\\x1b[31mevil.md:4)\n"
+	if buf.String() != want {
+		t.Fatalf("got:\n%q\nwant:\n%q", buf.String(), want)
+	}
+}
+
+func TestWriteTextCapsLongValues(t *testing.T) {
+	drifts := []detect.Drift{{Doc: "README.md", Section: strings.Repeat("a", 500), Line: 1}}
+	var buf bytes.Buffer
+	if err := report.WriteText(&buf, drifts); err != nil {
+		t.Fatal(err)
+	}
+	if want := "[low] " + strings.Repeat("a", 200) + "...\n"; !strings.HasPrefix(buf.String(), want) {
+		t.Fatalf("section not capped: %q", buf.String())
 	}
 }
