@@ -380,3 +380,66 @@ func TestGoReleaserConfig(t *testing.T) {
 		t.Error("checksums are not configured")
 	}
 }
+
+type ciWorkflow struct {
+	Name        string            `yaml:"name"`
+	On          map[string]any    `yaml:"on"`
+	Permissions map[string]string `yaml:"permissions"`
+	Jobs        map[string]struct {
+		RunsOn   string `yaml:"runs-on"`
+		Strategy struct {
+			Matrix map[string][]string `yaml:"matrix"`
+		} `yaml:"strategy"`
+		Steps []actionStep `yaml:"steps"`
+	} `yaml:"jobs"`
+}
+
+func TestCIWorkflow(t *testing.T) {
+	var w ciWorkflow
+	readStrict(t, ".github/workflows/ci.yml", &w)
+
+	if len(w.Permissions) != 1 || w.Permissions["contents"] != "read" {
+		t.Errorf("permissions = %v, want contents: read only", w.Permissions)
+	}
+	if len(w.Jobs) != 2 {
+		t.Fatalf("jobs = %d, want lint and test", len(w.Jobs))
+	}
+
+	lint, ok := w.Jobs["lint"]
+	if !ok {
+		t.Fatal("lint job missing")
+	}
+	if lint.RunsOn != "ubuntu-latest" || len(lint.Strategy.Matrix) != 0 {
+		t.Errorf("lint must run on ubuntu-latest only, without a matrix: %+v", lint)
+	}
+
+	test, ok := w.Jobs["test"]
+	if !ok {
+		t.Fatal("test job missing")
+	}
+	if test.RunsOn != "${{ matrix.os }}" {
+		t.Errorf("test runs-on = %q, want ${{ matrix.os }}", test.RunsOn)
+	}
+	if len(test.Strategy.Matrix) != 1 {
+		t.Errorf("test matrix must have only the os axis: %v", test.Strategy.Matrix)
+	}
+	if got := strings.Join(test.Strategy.Matrix["os"], ","); got != "ubuntu-latest,macos-latest" {
+		t.Errorf("test matrix os = %q, want ubuntu-latest,macos-latest", got)
+	}
+
+	var sawRace bool
+	for _, step := range test.Steps {
+		if strings.Contains(step.Run, "${{") {
+			t.Errorf("expression inside run block:\n%s", step.Run)
+		}
+		if step.Run == "go test ./..." {
+			t.Error("test step must use the race detector")
+		}
+		if step.Run == "go test -race ./..." {
+			sawRace = true
+		}
+	}
+	if !sawRace {
+		t.Error("test job needs a `go test -race ./...` step")
+	}
+}
