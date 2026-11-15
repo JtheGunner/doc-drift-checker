@@ -57,7 +57,7 @@ Pick one.
 go install github.com/JtheGunner/doc-drift-checker/cmd/doc-drift-checker@latest
 ```
 
-**From a release:** download the archive for your platform (macOS or Linux, amd64 or arm64) from the [GitHub Releases](https://github.com/JtheGunner/doc-drift-checker/releases) page, verify it against the published `checksums.txt`, unpack it and put `doc-drift-checker` on your `PATH`. Releases appear once a version tag has been published.
+**From a release:** download the archive for your platform (macOS or Linux, amd64 or arm64) from the [GitHub Releases](https://github.com/JtheGunner/doc-drift-checker/releases) page, verify it against the published `checksums.txt`, unpack it and put `doc-drift-checker` on your `PATH`.
 
 **From source:**
 
@@ -348,7 +348,7 @@ jobs:
 ```
 
 > [!IMPORTANT]
-> The Action is referenced by tag and therefore needs a released tag of this repository; replace `v0` with a tag that exists. The checkout must have full history (`fetch-depth: 0`).
+> `v0` is a moving tag that follows the latest `0.x` release; use a full version such as `v0.1.0` or a commit SHA for reproducible runs. The checkout must have full history (`fetch-depth: 0`).
 
 Details, inputs, the SARIF upload and the pre-commit hook are in [docs/ci-integration.md](docs/ci-integration.md).
 

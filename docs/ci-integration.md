@@ -25,8 +25,8 @@ Exit codes are the same for every format: `0` no drift, `1` drift, `2` usage or 
 
 The action installs the binary with `go install` and runs `check --base origin/<base> --format <format>` in your repository. The job fails when drift is found (exit `1`) or the check cannot run (exit `2`).
 
-> [!IMPORTANT]
-> The `uses:` reference below needs a released tag of this repository. `v0` is a placeholder; replace it with a tag that exists.
+> [!NOTE]
+> `v0` is a moving tag that follows the latest `0.x` release. For reproducible runs, reference a full version such as `v0.1.0` or a commit SHA instead.
 
 ```yaml
 name: Docs drift
@@ -126,13 +126,13 @@ Alternatively keep a single step and write `check ... --format sarif > drift.sar
 
 ## pre-commit
 
-The repository ships a [pre-commit](https://pre-commit.com) hook, `doc-drift-checker`. pre-commit builds it with Go, so Go must be installed. Replace `<tag>` with a released tag.
+The repository ships a [pre-commit](https://pre-commit.com) hook, `doc-drift-checker`. pre-commit builds it with Go, so Go must be installed. Use a released tag as `rev`.
 
 ```yaml
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/JtheGunner/doc-drift-checker
-    rev: <tag>
+    rev: v0.1.0
     hooks:
       - id: doc-drift-checker
 ```
