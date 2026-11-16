@@ -7,7 +7,9 @@ import (
 	"github.com/JtheGunner/doc-drift-checker/internal/testutil"
 )
 
-const docLinksConfig = "docs:\n  - README.md\n  - CHANGELOG.md\n"
+// The empty ignore list keeps the default ignore of release documents out of
+// these tests: they pin the doc-to-doc rule, not the ignore defaults.
+const docLinksConfig = "docs:\n  - README.md\n  - CHANGELOG.md\nignore: []\n"
 
 const docLinksReadme = "# Project\n\n## Quick start\n\nSee `README.md` for details.\n\n## Changelog\n\nSee [changes](CHANGELOG.md).\n\n## Explicit\n\nText.\n\n<!-- drift: CHANGELOG.md -->\n"
 

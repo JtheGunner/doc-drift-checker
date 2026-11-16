@@ -352,6 +352,18 @@ func TestExplainAgreesWithCheck(t *testing.T) {
 			r := historyRepo(t)
 			r.CommitFile("other/o_test.go", "package other\n", "add test")
 		}},
+		{"diff: release document only", true, func(t *testing.T) {
+			releaseDocsRepo(t, true).CommitFile("CHANGELOG.md", "changed\n", "changelog entry")
+		}},
+		{"diff: linked file next to release documents", true, func(t *testing.T) {
+			releaseDocsRepo(t, true).CommitFile("NOTES.md", "changed\n", "change notes")
+		}},
+		{"history: release document only", false, func(t *testing.T) {
+			releaseDocsRepo(t, false).CommitFile("LICENSE", "changed\n", "license year")
+		}},
+		{"history: linked file next to release documents", false, func(t *testing.T) {
+			releaseDocsRepo(t, false).CommitFile("NOTES.md", "changed\n", "change notes")
+		}},
 		{"history: lock suppresses newer code", false, func(t *testing.T) {
 			r := historyRepo(t)
 			r.CommitFile("src/lib.go", newLib, "code newer than docs")

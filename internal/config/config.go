@@ -11,7 +11,7 @@
 // # Default ignore globs
 //
 // Changes that only touch ignored paths never cause drift. The defaults cover
-// four groups (see DefaultIgnore for the exact list):
+// five groups (see DefaultIgnore for the exact list):
 //
 //	tests:      **/*_test.go  **/*.test.*  **/*.spec.*  **/test/**  **/tests/**
 //	            **/__tests__/**  **/testdata/**
@@ -20,6 +20,8 @@
 //	            **/composer.lock  **/Cargo.lock  **/Gemfile.lock  **/poetry.lock
 //	            **/uv.lock
 //	vendored:   **/vendor/**  **/node_modules/**  **/third_party/**
+//	release docs: **/CHANGELOG.md  **/LICENSE  **/LICENSE.md  **/LICENSE.txt
+//	            **/CONTRIBUTING.md
 //
 // A "**/" prefix also matches at the repository root. When the ignore key is
 // present in the file it replaces the defaults entirely: "ignore: []" disables
@@ -105,7 +107,8 @@ func Defaults() Config {
 }
 
 // DefaultIgnore returns a fresh copy of the built-in ignore globs: test files,
-// generated code, lockfiles and vendored code. A configured ignore key replaces it.
+// generated code, lockfiles, vendored code and release documents (changelog,
+// license, contribution guidelines). A configured ignore key replaces it.
 func DefaultIgnore() []string {
 	return []string{
 		// tests
@@ -118,6 +121,8 @@ func DefaultIgnore() []string {
 		"**/composer.lock", "**/Cargo.lock", "**/Gemfile.lock", "**/poetry.lock", "**/uv.lock",
 		// vendored code
 		"**/vendor/**", "**/node_modules/**", "**/third_party/**",
+		// release documents
+		"**/CHANGELOG.md", "**/LICENSE", "**/LICENSE.md", "**/LICENSE.txt", "**/CONTRIBUTING.md",
 	}
 }
 
