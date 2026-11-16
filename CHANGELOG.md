@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). The release date is filled in when the version tag is created.
 
+## [0.3.0] - Unreleased
+
+### Changed
+
+- The default `ignore` list now includes the release documents `CHANGELOG.md`, `LICENSE`, `LICENSE.md`, `LICENSE.txt` and `CONTRIBUTING.md` (at any depth), so a new changelog entry or a license year no longer reports a README section as outdated. A section that is explicitly linked to one of these files (annotation or `mappings`) no longer reports drift for it either, unless the config sets its own `ignore` list, which still replaces the defaults entirely.
+
 ## [0.2.3] - 2026-11-16
 
 ### Added

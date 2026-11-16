@@ -286,7 +286,7 @@ severity:
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `docs` | `["README.md"]` | Documentation files to check. |
-| `ignore` | tests, generated code, lockfiles and vendored code | Globs of paths whose changes never cause drift. |
+| `ignore` | tests, generated code, lockfiles, vendored code and release documents (`CHANGELOG.md`, `LICENSE`, `LICENSE.md`, `LICENSE.txt`, `CONTRIBUTING.md`, at any depth) | Globs of paths whose changes never cause drift. A present `ignore` key replaces the defaults. |
 | `mappings` | none | Section-to-code links. A key is the **complete heading text, emoji included** (`🚩 Flags`, not `Flags`), or `#anchor`. `doc-drift-checker links` lists keys that match no section as `unmatched mapping`; `check` and `explain` ignore them. |
 | `mode.default` | `diff` (see below) | `diff` or `history`: the mode of `check` and `explain` when `--base` is not given. `--base` always selects diff mode. Left unset, a run without `--base` uses history mode. Set to `diff`, a run without `--base` is a usage error (exit `2`). |
 | `severity.fail-on` | `low` | Lowest severity that makes `check` exit `1`. The `--min-severity` flag wins. |
@@ -335,7 +335,7 @@ A drift is **high** when the section's own text mentions a flag (`--name`), an e
 
 To keep the report quiet, a change is dropped before drift is decided when:
 
-1. **Path:** every path of the change matches an `ignore` glob (tests, generated code, lockfiles and vendored code by default).
+1. **Path:** every path of the change matches an `ignore` glob (tests, generated code, lockfiles, vendored code and release documents by default).
 2. **Whitespace:** a modified file differs only in whitespace or blank lines.
 3. **Go API (diff mode):** a changed `.go` file has the same exported API on both sides. Function bodies, comments, imports and unexported code do not count; exported functions, methods, types, struct fields, constants and variables, the package name and build constraints do. A file that fails to parse counts as changed.
 

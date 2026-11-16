@@ -147,7 +147,10 @@ func TestDefaultIgnore(t *testing.T) {
 	if len(d.Ignore) == 0 {
 		t.Fatal("Ignore default must not be empty")
 	}
-	for _, want := range []string{"**/*_test.go", "**/*.pb.go", "**/go.sum", "**/vendor/**"} {
+	for _, want := range []string{
+		"**/*_test.go", "**/*.pb.go", "**/go.sum", "**/vendor/**",
+		"**/CHANGELOG.md", "**/LICENSE", "**/LICENSE.md", "**/LICENSE.txt", "**/CONTRIBUTING.md",
+	} {
 		found := false
 		for _, glob := range d.Ignore {
 			found = found || glob == want

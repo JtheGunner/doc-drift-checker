@@ -39,7 +39,7 @@ Untrusted repo content: read files only via `fsx.ReadRegularFile(root, rel)` (os
 
 `Config.Mode.DefaultSet` is true only when the file sets `mode.default` explicitly; `Defaults()` leaves it false. `check` and `explain` read it (see "Drift check (history mode)"): the documented default `diff` is not applied without it, so a config without the key behaves like no config.
 
-`ignore` defaults to `config.DefaultIgnore()` (tests, generated code, lockfiles, vendored code). A present `ignore` key replaces the defaults entirely; `ignore: []` disables path ignoring.
+`ignore` defaults to `config.DefaultIgnore()` (tests, generated code, lockfiles, vendored code, release documents: `CHANGELOG.md`, `LICENSE`, `LICENSE.md`, `LICENSE.txt`, `CONTRIBUTING.md`, each at any depth). A present `ignore` key replaces the defaults entirely; `ignore: []` disables path ignoring. Ignoring applies to every link origin: a section explicitly linked to `CHANGELOG.md` reports no drift for it under the defaults (tests that need such a link set `ignore: []`).
 
 ## Section-to-code links
 
