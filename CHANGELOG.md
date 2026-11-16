@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). The release date is filled in when the version tag is created.
 
-## [0.3.0] - Unreleased
+## [0.3.0] - 2026-11-16
 
 ### Changed
 
